@@ -1,0 +1,30 @@
+# Bog'liqliklar (dependencies)
+/node_modules
+
+# Build natijalari
+/dist
+/build
+
+# Atrof-muhit o'zgaruvchilari (sirlar) — .env.example saqlanadi
+.env
+.env.local
+.env.*.local
+
+# Loglar
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test qamrovi (coverage)
+/coverage
+
+# IDE / muharrir
+.idea
+.vscode
+*.swp
+.DS_Store
+
+# Vaqtinchalik fayllar
+*.tsbuildinfo

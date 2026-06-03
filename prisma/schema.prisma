@@ -1,0 +1,106 @@
+// Apteka CRM ma'lumotlar bazasi sxemasi
+// Prisma + PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Dori katalogi (mahsulot kartochkasi)
+model Product {
+  id           Int         @id @default(autoincrement())
+  name         String
+  barcode      String?     @unique
+  manufacturer String?
+  form         String? // tabletka, sirop, ampula va h.k.
+  unit         String      @default("dona") // eng kichik o'lchov birligi (dona)
+  unitsPerPack Int         @default(1) // pachkadagi dona soni (sirop uchun 1)
+  description  String?
+  minStock     Int         @default(0) // kam qolish chegarasi (ogohlantirish uchun)
+  defaultCostPrice Decimal? @db.Decimal(12, 2) // katalog/tavsiya kelish narxi (prixodda taklif qilinadi)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  batches      Batch[]
+  saleItems    SaleItem[]
+
+  @@index([name])
+}
+
+/// Partiya (prixod) — har bir kelish alohida narx va yaroqlilik muddatiga ega
+model Batch {
+  id          Int        @id @default(autoincrement())
+  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId   Int
+  batchNumber String? // partiya raqami (ixtiyoriy)
+  expiryDate  DateTime // yaroqlilik muddati
+  quantity    Int // joriy qoldiq (DONADA)
+  costPrice   Decimal    @db.Decimal(12, 2) // pachka kelish narxi
+  sellPrice   Decimal    @db.Decimal(12, 2) // pachka sotish narxi
+  receivedAt  DateTime   @default(now())
+  saleItems   SaleItem[]
+
+  @@index([productId])
+  @@index([expiryDate])
+}
+
+/// Kassir uchun xabarlar (masalan: narx pasayishi haqida ogohlantirish)
+model Notification {
+  id          Int      @id @default(autoincrement())
+  type        String   @default("PRICE_DROP") // xabar turi (kelajakda kengayadi)
+  productId   Int? // tegishli dori (ixtiyoriy)
+  productName String // dori nomi (xabar matnida ko'rsatish uchun)
+  oldPrice    Decimal? @db.Decimal(12, 2) // eski (saqlangan) sotish narxi
+  newPrice    Decimal? @db.Decimal(12, 2) // import qilingan past narx
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([read])
+  @@index([createdAt])
+}
+
+enum PaymentType {
+  CASH
+  CARD
+}
+
+/// Sotuv birligi: butun pachka yoki dona (donalab)
+enum SaleUnit {
+  PACK
+  PIECE
+}
+
+/// Sotuv cheki
+model Sale {
+  id          Int         @id @default(autoincrement())
+  subtotal    Decimal     @db.Decimal(12, 2) @default(0) // chegirmagacha jami
+  discount    Decimal     @db.Decimal(12, 2) @default(0) // qo'llanilgan chegirma (so'mda)
+  total       Decimal     @db.Decimal(12, 2) // yakuniy to'lov (subtotal - discount)
+  paymentType PaymentType @default(CASH)
+  createdAt   DateTime    @default(now())
+  items       SaleItem[]
+
+  @@index([createdAt])
+}
+
+/// Chek qatori (qaysi partiyadan qancha sotildi)
+model SaleItem {
+  id        Int     @id @default(autoincrement())
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleId    Int
+  product   Product @relation(fields: [productId], references: [id])
+  productId Int
+  batch     Batch    @relation(fields: [batchId], references: [id])
+  batchId   Int
+  unit      SaleUnit @default(PACK) // pachka yoki dona sotildi
+  quantity  Int // sotilgan birlikdagi son (pachka soni yoki dona soni)
+  price     Decimal  @db.Decimal(12, 2) // o'sha birlik narxi (sotuv paytida muzlatilgan)
+  subtotal  Decimal  @db.Decimal(12, 2)
+
+  @@index([saleId])
+  @@index([productId]) // dori o'chirish va dori bo'yicha tahlil uchun
+  @@index([batchId]) // partiya o'chirish/qidirish uchun
+}
