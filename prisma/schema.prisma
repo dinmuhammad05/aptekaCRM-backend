@@ -67,6 +67,23 @@ enum PaymentType {
   CARD
 }
 
+/// Foydalanuvchi roli
+enum Role {
+  ADMIN
+  CASHIER
+}
+
+/// Tizim foydalanuvchisi (kassir / admin)
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  name         String?
+  role         Role     @default(CASHIER)
+  createdAt    DateTime @default(now())
+  sales        Sale[]
+}
+
 /// Sotuv birligi: butun pachka yoki dona (donalab)
 enum SaleUnit {
   PACK
@@ -82,8 +99,11 @@ model Sale {
   paymentType PaymentType @default(CASH)
   createdAt   DateTime    @default(now())
   items       SaleItem[]
+  user        User?       @relation(fields: [userId], references: [id])
+  userId      Int? // sotuvni amalga oshirgan kassir
 
   @@index([createdAt])
+  @@index([userId])
 }
 
 /// Chek qatori (qaysi partiyadan qancha sotildi)

@@ -10,6 +10,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Role } from '@prisma/client';
+import { Roles } from '../auth/roles.decorator';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ImportCatalogDto } from './dto/import-catalog.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -67,6 +69,7 @@ export class ProductsController {
   }
 
   @Delete(':id')
+  @Roles(Role.ADMIN)
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.productsService.remove(id);
   }

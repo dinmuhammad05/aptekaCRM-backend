@@ -8,6 +8,10 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Role } from '@prisma/client';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthUser } from '../auth/current-user.decorator';
+import { Roles } from '../auth/roles.decorator';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { SalesService } from './sales.service';
 
@@ -16,8 +20,8 @@ export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
   @Post()
-  create(@Body() dto: CreateSaleDto) {
-    return this.salesService.create(dto);
+  create(@Body() dto: CreateSaleDto, @CurrentUser() user: AuthUser) {
+    return this.salesService.create(dto, user.id);
   }
 
   @Get()
@@ -29,11 +33,13 @@ export class SalesController {
   }
 
   @Get('stats')
+  @Roles(Role.ADMIN)
   stats(@Query('from') from?: string, @Query('to') to?: string) {
     return this.salesService.stats(from, to);
   }
 
   @Get('top')
+  @Roles(Role.ADMIN)
   top(
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -43,6 +49,7 @@ export class SalesController {
   }
 
   @Get('daily')
+  @Roles(Role.ADMIN)
   daily(@Query('from') from?: string, @Query('to') to?: string) {
     return this.salesService.daily(from, to);
   }

@@ -10,6 +10,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Role } from '@prisma/client';
+import { Roles } from '../auth/roles.decorator';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { ImportStockDto } from './dto/import-stock.dto';
 import { ReceiveStockDto } from './dto/receive-stock.dto';
@@ -31,6 +33,7 @@ export class InventoryController {
   }
 
   @Post('adjust')
+  @Roles(Role.ADMIN)
   adjust(@Body() dto: AdjustStockDto) {
     return this.inventoryService.adjustStock(dto);
   }
@@ -56,6 +59,7 @@ export class InventoryController {
   }
 
   @Delete('batch/:id')
+  @Roles(Role.ADMIN)
   deleteBatch(@Param('id', ParseIntPipe) id: number) {
     return this.inventoryService.deleteBatch(id);
   }

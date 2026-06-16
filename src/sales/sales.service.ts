@@ -18,7 +18,7 @@ export class SalesService {
    *  - chek (Sale) va qatorlarni (SaleItem) yozadi
    * Qoldiq yetmasa — butun tranzaksiya bekor qilinadi.
    */
-  async create(dto: CreateSaleDto) {
+  async create(dto: CreateSaleDto, userId?: number) {
     // Muddati o'tgan dorini sotib bo'lmaydi: bugundan oldingi partiyalar hisobga
     // olinmaydi (sana bo'yicha, vaqtsiz)
     const today = new Date();
@@ -113,6 +113,7 @@ export class SalesService {
           discount,
           total,
           paymentType: dto.paymentType,
+          userId,
           items: { createMany: { data: saleItemsData } },
         },
         include: { items: true },
