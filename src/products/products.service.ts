@@ -23,6 +23,13 @@ function extractUnitsPerPack(name: string): number | undefined {
   return n >= 1 && n <= 1000 ? n : undefined;
 }
 
+/** Bugun (yarim tunda) — muddati o'tgan partiyalarni ajratish uchun */
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -123,7 +130,8 @@ export class ProductsService {
       },
       include: {
         batches: {
-          where: { quantity: { gt: 0 } },
+          // Faqat yaroqli (muddati o'tmagan) partiyalar — POS sotiladigan qoldiq
+          where: { quantity: { gt: 0 }, expiryDate: { gte: startOfToday() } },
           orderBy: { expiryDate: 'asc' },
         },
       },
@@ -166,7 +174,8 @@ export class ProductsService {
       where: { barcode },
       include: {
         batches: {
-          where: { quantity: { gt: 0 } },
+          // Faqat yaroqli (muddati o'tmagan) partiyalar
+          where: { quantity: { gt: 0 }, expiryDate: { gte: startOfToday() } },
           orderBy: { expiryDate: 'asc' },
         },
       },

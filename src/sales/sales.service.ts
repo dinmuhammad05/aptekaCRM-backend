@@ -19,6 +19,11 @@ export class SalesService {
    * Qoldiq yetmasa — butun tranzaksiya bekor qilinadi.
    */
   async create(dto: CreateSaleDto) {
+    // Muddati o'tgan dorini sotib bo'lmaydi: bugundan oldingi partiyalar hisobga
+    // olinmaydi (sana bo'yicha, vaqtsiz)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     return this.prisma.$transaction(async (tx) => {
       const saleItemsData: Prisma.SaleItemCreateManySaleInput[] = [];
       let subtotal = new Prisma.Decimal(0);
@@ -40,18 +45,23 @@ export class SalesService {
             ? item.quantity * product.unitsPerPack
             : item.quantity;
 
-        // FEFO: muddati eng yaqin partiyalar birinchi
+        // FEFO: muddati eng yaqin partiyalar birinchi. Muddati o'tganlari
+        // (expiryDate < bugun) sotuvga umuman kiritilmaydi.
         const batches = await tx.batch.findMany({
-          where: { productId: item.productId, quantity: { gt: 0 } },
+          where: {
+            productId: item.productId,
+            quantity: { gt: 0 },
+            expiryDate: { gte: today },
+          },
           orderBy: { expiryDate: 'asc' },
         });
 
-        // Qoldiq tekshiruvi donada
+        // Qoldiq tekshiruvi donada (faqat muddati o'tmagan partiyalar)
         const availablePieces = batches.reduce((sum, b) => sum + b.quantity, 0);
         if (availablePieces < pieces) {
           const unitLabel = item.unit === SaleUnit.PACK ? 'pachka' : 'dona';
           throw new BadRequestException(
-            `"${product.name}" uchun qoldiq yetarli emas (mavjud: ${availablePieces} dona, kerak: ${item.quantity} ${unitLabel})`,
+            `"${product.name}" uchun yaroqli qoldiq yetarli emas (mavjud: ${availablePieces} dona, kerak: ${item.quantity} ${unitLabel}). Muddati o'tgan partiyalar sotilmaydi.`,
           );
         }
 
