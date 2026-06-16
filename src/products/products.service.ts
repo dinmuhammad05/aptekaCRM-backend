@@ -11,6 +11,18 @@ function normalizeName(name: string): string {
   return name.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Dori nomidan pachkadagi dona sonini aniqlaydi: "№N" belgisi (masalan
+ * "Актовегин амп 10мл №5" → 5). Topilmasa undefined (default 1 ishlatiladi).
+ * "10мл" kabi hajm bilan adashtirmaslik uchun faqat № belgisiga tayanamiz.
+ */
+function extractUnitsPerPack(name: string): number | undefined {
+  const m = name.match(/№\s*(\d{1,4})/);
+  if (!m) return undefined;
+  const n = parseInt(m[1], 10);
+  return n >= 1 && n <= 1000 ? n : undefined;
+}
+
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -35,7 +47,11 @@ export class ProductsService {
     const existingNames = new Set(existing.map((p) => normalizeName(p.name)));
 
     const seen = new Set<string>();
-    const toCreate: { name: string; defaultCostPrice?: number }[] = [];
+    const toCreate: {
+      name: string;
+      defaultCostPrice?: number;
+      unitsPerPack?: number;
+    }[] = [];
     const skippedNames: string[] = [];
 
     for (const item of dto.items) {
@@ -47,9 +63,12 @@ export class ProductsService {
         continue;
       }
       seen.add(key);
+      const name = item.name.trim();
       toCreate.push({
-        name: item.name.trim(),
+        name,
         defaultCostPrice: item.defaultCostPrice,
+        // Nomdagi "№N" dan pachka hajmi avtomatik aniqlanadi (topilmasa 1)
+        unitsPerPack: extractUnitsPerPack(name),
       });
     }
 

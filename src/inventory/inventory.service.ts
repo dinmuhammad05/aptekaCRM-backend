@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { ImportStockDto } from './dto/import-stock.dto';
 import { ReceiveStockDto } from './dto/receive-stock.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
@@ -236,5 +237,60 @@ export class InventoryService {
 
     await this.prisma.batch.delete({ where: { id } });
     return { id };
+  }
+
+  /**
+   * Inventarizatsiya: dorining haqiqiy qoldig'ini (donada) berib, tizim
+   * partiyalarni avtomatik to'g'rilaydi — foydalanuvchi partiya tanlamaydi.
+   *  - kamaytirish kerak bo'lsa: muddati eng yaqin (FEFO) partiyadan boshlab kamaytiriladi
+   *  - ko'paytirish kerak bo'lsa: mavjud (front) partiyaga qo'shiladi
+   *    (partiya umuman bo'lmasa — narx/muddat kerakligi uchun avval qabul qilish so'raladi)
+   */
+  async adjustStock(dto: AdjustStockDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const product = await tx.product.findUnique({
+        where: { id: dto.productId },
+      });
+      if (!product) {
+        throw new NotFoundException(`Dori topilmadi (id=${dto.productId})`);
+      }
+
+      const batches = await tx.batch.findMany({
+        where: { productId: dto.productId },
+        orderBy: { expiryDate: 'asc' },
+      });
+      const currentTotal = batches.reduce((sum, b) => sum + b.quantity, 0);
+      const delta = dto.quantity - currentTotal;
+
+      if (delta < 0) {
+        // Kamaytirish — FEFO bo'yicha (eng yaqin muddatdan)
+        let toRemove = -delta;
+        for (const batch of batches) {
+          if (toRemove <= 0) break;
+          const take = Math.min(batch.quantity, toRemove);
+          if (take > 0) {
+            await tx.batch.update({
+              where: { id: batch.id },
+              data: { quantity: { decrement: take } },
+            });
+            toRemove -= take;
+          }
+        }
+      } else if (delta > 0) {
+        // Ko'paytirish — mavjud (front) partiyaga qo'shamiz
+        const front = batches[0];
+        if (!front) {
+          throw new BadRequestException(
+            "Faol partiya yo'q — avval dorini qabul qiling (narx va muddat kerak)",
+          );
+        }
+        await tx.batch.update({
+          where: { id: front.id },
+          data: { quantity: { increment: delta } },
+        });
+      }
+
+      return { productId: dto.productId, totalStock: dto.quantity };
+    });
   }
 }

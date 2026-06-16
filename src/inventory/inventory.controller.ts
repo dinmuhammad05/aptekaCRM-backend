@@ -10,6 +10,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { ImportStockDto } from './dto/import-stock.dto';
 import { ReceiveStockDto } from './dto/receive-stock.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
@@ -27,6 +28,11 @@ export class InventoryController {
   @Post('import')
   importStock(@Body() dto: ImportStockDto) {
     return this.inventoryService.importStock(dto);
+  }
+
+  @Post('adjust')
+  adjust(@Body() dto: AdjustStockDto) {
+    return this.inventoryService.adjustStock(dto);
   }
 
   @Get('stock')
