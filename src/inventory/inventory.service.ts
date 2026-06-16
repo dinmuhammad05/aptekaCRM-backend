@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImportStockDto } from './dto/import-stock.dto';
 import { ReceiveStockDto } from './dto/receive-stock.dto';
+import { UpdateBatchDto } from './dto/update-batch.dto';
 
 @Injectable()
 export class InventoryService {
@@ -183,5 +184,52 @@ export class InventoryService {
       orderBy: { expiryDate: 'asc' },
       include: { product: true },
     });
+  }
+
+  /**
+   * Mavjud partiyani to'g'rilash (narx, muddat, qoldiq, partiya raqami).
+   * Faqat berilgan maydonlar yangilanadi. `quantity` donada keladi.
+   */
+  async updateBatch(id: number, dto: UpdateBatchDto) {
+    const batch = await this.prisma.batch.findUnique({ where: { id } });
+    if (!batch) {
+      throw new NotFoundException(`Partiya topilmadi (id=${id})`);
+    }
+
+    return this.prisma.batch.update({
+      where: { id },
+      data: {
+        ...(dto.batchNumber !== undefined && { batchNumber: dto.batchNumber }),
+        ...(dto.expiryDate !== undefined && {
+          expiryDate: new Date(dto.expiryDate),
+        }),
+        ...(dto.quantity !== undefined && { quantity: dto.quantity }),
+        ...(dto.costPrice !== undefined && { costPrice: dto.costPrice }),
+        ...(dto.sellPrice !== undefined && { sellPrice: dto.sellPrice }),
+      },
+    });
+  }
+
+  /**
+   * Partiyani o'chiradi. Agar shu partiyadan sotuv bo'lgan bo'lsa (SaleItem
+   * bog'langan) — tarix buzilmasligi uchun o'chirilmaydi, do'stona xato qaytadi.
+   */
+  async deleteBatch(id: number) {
+    const batch = await this.prisma.batch.findUnique({ where: { id } });
+    if (!batch) {
+      throw new NotFoundException(`Partiya topilmadi (id=${id})`);
+    }
+
+    const soldCount = await this.prisma.saleItem.count({
+      where: { batchId: id },
+    });
+    if (soldCount > 0) {
+      throw new BadRequestException(
+        "Bu partiyadan sotuv bo'lgan, o'chirib bo'lmaydi. Qoldiqni 0 ga tushiring.",
+      );
+    }
+
+    await this.prisma.batch.delete({ where: { id } });
+    return { id };
   }
 }

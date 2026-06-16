@@ -2,13 +2,17 @@ import {
   Body,
   Controller,
   DefaultValuePipe,
+  Delete,
   Get,
+  Param,
+  Patch,
   ParseIntPipe,
   Post,
   Query,
 } from '@nestjs/common';
 import { ImportStockDto } from './dto/import-stock.dto';
 import { ReceiveStockDto } from './dto/receive-stock.dto';
+import { UpdateBatchDto } from './dto/update-batch.dto';
 import { InventoryService } from './inventory.service';
 
 @Controller('inventory')
@@ -35,5 +39,18 @@ export class InventoryController {
     @Query('days', new DefaultValuePipe(30), ParseIntPipe) days: number,
   ) {
     return this.inventoryService.expiringSoon(days);
+  }
+
+  @Patch('batch/:id')
+  updateBatch(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateBatchDto,
+  ) {
+    return this.inventoryService.updateBatch(id, dto);
+  }
+
+  @Delete('batch/:id')
+  deleteBatch(@Param('id', ParseIntPipe) id: number) {
+    return this.inventoryService.deleteBatch(id);
   }
 }
