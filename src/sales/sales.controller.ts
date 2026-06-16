@@ -13,6 +13,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { ReturnSaleDto } from './dto/return-sale.dto';
 import { SalesService } from './sales.service';
 
 @Controller('sales')
@@ -22,6 +23,15 @@ export class SalesController {
   @Post()
   create(@Body() dto: CreateSaleDto, @CurrentUser() user: AuthUser) {
     return this.salesService.create(dto, user.id);
+  }
+
+  @Post(':id/return')
+  returnSale(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReturnSaleDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.salesService.returnSale(id, dto, user.id);
   }
 
   @Get()

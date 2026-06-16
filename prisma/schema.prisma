@@ -82,6 +82,7 @@ model User {
   role         Role     @default(CASHIER)
   createdAt    DateTime @default(now())
   sales        Sale[]
+  returns      Return[]
 }
 
 /// Sotuv birligi: butun pachka yoki dona (donalab)
@@ -101,6 +102,7 @@ model Sale {
   items       SaleItem[]
   user        User?       @relation(fields: [userId], references: [id])
   userId      Int? // sotuvni amalga oshirgan kassir
+  returns     Return[]
 
   @@index([createdAt])
   @@index([userId])
@@ -119,8 +121,38 @@ model SaleItem {
   quantity  Int // sotilgan birlikdagi son (pachka soni yoki dona soni)
   price     Decimal  @db.Decimal(12, 2) // o'sha birlik narxi (sotuv paytida muzlatilgan)
   subtotal  Decimal  @db.Decimal(12, 2)
+  returnItems ReturnItem[]
 
   @@index([saleId])
   @@index([productId]) // dori o'chirish va dori bo'yicha tahlil uchun
   @@index([batchId]) // partiya o'chirish/qidirish uchun
+}
+
+/// Qaytarish (vozvrat) — sotilgan dori(lar)ning bir qismi yoki hammasi qaytariladi
+model Return {
+  id        Int          @id @default(autoincrement())
+  sale      Sale         @relation(fields: [saleId], references: [id])
+  saleId    Int
+  user      User?        @relation(fields: [userId], references: [id])
+  userId    Int? // qaytarishni amalga oshirgan kassir
+  total     Decimal      @db.Decimal(12, 2) // qaytarilgan summa
+  createdAt DateTime     @default(now())
+  items     ReturnItem[]
+
+  @@index([saleId])
+  @@index([createdAt])
+}
+
+/// Qaytarish qatori (qaysi chek qatoridan qancha qaytarildi)
+model ReturnItem {
+  id         Int      @id @default(autoincrement())
+  return     Return   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  returnId   Int
+  saleItem   SaleItem @relation(fields: [saleItemId], references: [id])
+  saleItemId Int
+  quantity   Int // qaytarilgan birlik soni (sotuv birligida)
+  subtotal   Decimal  @db.Decimal(12, 2)
+
+  @@index([returnId])
+  @@index([saleItemId])
 }

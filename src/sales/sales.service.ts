@@ -7,6 +7,7 @@ import { Prisma, SaleUnit } from '@prisma/client';
 import { computePiecePrice } from '../common/pricing';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSaleDto, DiscountType } from './dto/create-sale.dto';
+import { ReturnSaleDto } from './dto/return-sale.dto';
 
 @Injectable()
 export class SalesService {
@@ -167,6 +168,82 @@ export class SalesService {
       throw new NotFoundException(`Chek topilmadi (id=${id})`);
     }
     return sale;
+  }
+
+  /**
+   * Sotuvni (qisman yoki to'liq) qaytaradi. Bir tranzaksiyada:
+   *  - har qator uchun qaytarish mumkin bo'lgan miqdordan oshmasligini tekshiradi
+   *    (sotilgan − allaqachon qaytarilgan),
+   *  - qoldiqni asl partiyaga (donada) qaytaradi,
+   *  - Return + ReturnItem yozuvlarini yaratadi.
+   */
+  async returnSale(saleId: number, dto: ReturnSaleDto, userId?: number) {
+    return this.prisma.$transaction(async (tx) => {
+      const sale = await tx.sale.findUnique({
+        where: { id: saleId },
+        include: { items: { include: { product: true } } },
+      });
+      if (!sale) {
+        throw new NotFoundException(`Chek topilmadi (id=${saleId})`);
+      }
+
+      const returnItemsData: {
+        saleItemId: number;
+        quantity: number;
+        subtotal: Prisma.Decimal;
+      }[] = [];
+      let total = new Prisma.Decimal(0);
+
+      for (const reqItem of dto.items) {
+        const saleItem = sale.items.find((si) => si.id === reqItem.saleItemId);
+        if (!saleItem) {
+          throw new BadRequestException(
+            `Chek qatori topilmadi (id=${reqItem.saleItemId})`,
+          );
+        }
+
+        // Avval qaytarilgan miqdor
+        const agg = await tx.returnItem.aggregate({
+          where: { saleItemId: saleItem.id },
+          _sum: { quantity: true },
+        });
+        const alreadyReturned = agg._sum.quantity ?? 0;
+        const remaining = saleItem.quantity - alreadyReturned;
+        if (reqItem.quantity > remaining) {
+          throw new BadRequestException(
+            `"${saleItem.product.name}" uchun qaytarish miqdori ortiqcha (mumkin: ${remaining})`,
+          );
+        }
+
+        // Qoldiqni asl partiyaga donada qaytaramiz
+        const pieces =
+          saleItem.unit === SaleUnit.PACK
+            ? reqItem.quantity * saleItem.product.unitsPerPack
+            : reqItem.quantity;
+        await tx.batch.update({
+          where: { id: saleItem.batchId },
+          data: { quantity: { increment: pieces } },
+        });
+
+        const subtotal = saleItem.price.mul(reqItem.quantity);
+        total = total.add(subtotal);
+        returnItemsData.push({
+          saleItemId: saleItem.id,
+          quantity: reqItem.quantity,
+          subtotal,
+        });
+      }
+
+      return tx.return.create({
+        data: {
+          saleId,
+          userId,
+          total,
+          items: { createMany: { data: returnItemsData } },
+        },
+        include: { items: true },
+      });
+    });
   }
 
   /** Hisobot sana oralig'i: standart — joriy oy boshi..bugun */
