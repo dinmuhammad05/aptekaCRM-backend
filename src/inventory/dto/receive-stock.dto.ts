@@ -24,9 +24,15 @@ export class ReceiveStockDto {
   @IsDateString()
   expiryDate: string;
 
+  @IsOptional()
   @IsInt()
-  @Min(1)
-  packs: number; // nechta pachka keldi (donaga avtomatik o'tkaziladi)
+  @Min(0)
+  packs?: number; // nechta pachka keldi (donaga avtomatik o'tkaziladi)
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  pieces?: number; // pachkadan tashqari ochiq dona soni
 
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })

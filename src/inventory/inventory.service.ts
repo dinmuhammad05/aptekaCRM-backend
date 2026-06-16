@@ -22,8 +22,13 @@ export class InventoryService {
       throw new NotFoundException(`Dori topilmadi (id=${dto.productId})`);
     }
 
-    // Pachka soni donaga o'tkaziladi: qoldiq har doim donada saqlanadi
-    const quantity = dto.packs * product.unitsPerPack;
+    // Qoldiq har doim donada saqlanadi: pachka donaga o'tkazilib, ochiq dona
+    // qo'shiladi (masalan 5 pachka + 45 dona)
+    const quantity =
+      (dto.packs ?? 0) * product.unitsPerPack + (dto.pieces ?? 0);
+    if (quantity <= 0) {
+      throw new BadRequestException("Miqdor 0 dan katta bo'lishi kerak");
+    }
 
     return this.prisma.batch.create({
       data: {
