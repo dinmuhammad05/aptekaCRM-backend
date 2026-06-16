@@ -167,4 +167,110 @@ export class SalesService {
     }
     return sale;
   }
+
+  /** Hisobot sana oralig'i: standart — joriy oy boshi..bugun */
+  private parseRange(from?: string, to?: string) {
+    const start = from ? new Date(from) : new Date();
+    if (!from) start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+    const end = to ? new Date(to) : new Date();
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+
+  /** Bitta sotuv qatori uchun donadagi tannarx (PACK/PIECE) */
+  private unitCost(item: {
+    unit: SaleUnit;
+    batch: { costPrice: Prisma.Decimal };
+    product: { unitsPerPack: number };
+  }): Prisma.Decimal {
+    return item.unit === SaleUnit.PACK
+      ? item.batch.costPrice
+      : computePiecePrice(item.batch.costPrice, item.product.unitsPerPack);
+  }
+
+  /** Umumiy ko'rsatkichlar: savdo, tannarx, foyda, sotuvlar soni, sotilgan dona */
+  async stats(from?: string, to?: string) {
+    const { start, end } = this.parseRange(from, to);
+    const sales = await this.prisma.sale.findMany({
+      where: { createdAt: { gte: start, lte: end } },
+      include: { items: { include: { batch: true, product: true } } },
+    });
+
+    let revenue = new Prisma.Decimal(0);
+    let cost = new Prisma.Decimal(0);
+    let itemsSold = 0;
+    for (const sale of sales) {
+      revenue = revenue.add(sale.total);
+      for (const item of sale.items) {
+        cost = cost.add(this.unitCost(item).mul(item.quantity));
+        itemsSold +=
+          item.unit === SaleUnit.PACK
+            ? item.quantity * item.product.unitsPerPack
+            : item.quantity;
+      }
+    }
+
+    return {
+      revenue: revenue.toFixed(2),
+      cost: cost.toFixed(2),
+      profit: revenue.sub(cost).toFixed(2),
+      salesCount: sales.length,
+      itemsSold,
+    };
+  }
+
+  /** Eng ko'p sotilgan dorilar (savdo summasi bo'yicha) */
+  async top(from?: string, to?: string, limit = 10) {
+    const { start, end } = this.parseRange(from, to);
+    const items = await this.prisma.saleItem.findMany({
+      where: { sale: { createdAt: { gte: start, lte: end } } },
+      include: { product: true },
+    });
+
+    const map = new Map<
+      number,
+      { name: string; quantity: number; revenue: Prisma.Decimal }
+    >();
+    for (const item of items) {
+      const cur = map.get(item.productId) ?? {
+        name: item.product.name,
+        quantity: 0,
+        revenue: new Prisma.Decimal(0),
+      };
+      cur.quantity += item.quantity;
+      cur.revenue = cur.revenue.add(item.subtotal);
+      map.set(item.productId, cur);
+    }
+
+    return [...map.entries()]
+      .map(([productId, v]) => ({
+        productId,
+        name: v.name,
+        quantity: v.quantity,
+        revenue: v.revenue.toFixed(2),
+      }))
+      .sort((a, b) => Number(b.revenue) - Number(a.revenue))
+      .slice(0, Math.min(Math.max(limit, 1), 50));
+  }
+
+  /** Kunlik savdo (oddiy grafik uchun) */
+  async daily(from?: string, to?: string) {
+    const { start, end } = this.parseRange(from, to);
+    const sales = await this.prisma.sale.findMany({
+      where: { createdAt: { gte: start, lte: end } },
+      select: { createdAt: true, total: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const map = new Map<string, Prisma.Decimal>();
+    for (const s of sales) {
+      const key = s.createdAt.toISOString().slice(0, 10);
+      map.set(key, (map.get(key) ?? new Prisma.Decimal(0)).add(s.total));
+    }
+    return [...map.entries()].map(([date, total]) => ({
+      date,
+      revenue: total.toFixed(2),
+    }));
+  }
 }

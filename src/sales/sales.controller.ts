@@ -28,6 +28,25 @@ export class SalesController {
     return this.salesService.findAll(take, skip);
   }
 
+  @Get('stats')
+  stats(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.salesService.stats(from, to);
+  }
+
+  @Get('top')
+  top(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
+  ) {
+    return this.salesService.top(from, to, limit);
+  }
+
+  @Get('daily')
+  daily(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.salesService.daily(from, to);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.salesService.findOne(id);
