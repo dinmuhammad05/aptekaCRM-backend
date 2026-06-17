@@ -1,5 +1,8 @@
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 
+// Eslatma: seed oddiy PrismaClient bilan ishlaydi (tenant middleware'siz),
+// shuning uchun har bir yozuvga pharmacyId QO'LDA beriladi.
 const prisma = new PrismaClient();
 
 /** Yaroqlilik muddati uchun yordamchi (bugundan N oy keyin) */
@@ -10,11 +13,60 @@ function monthsFromNow(months: number): Date {
 }
 
 async function main(): Promise<void> {
-  // Avvalgi sinov ma'lumotlarini tozalash
+  // Avvalgi sinov ma'lumotlarini tozalash (bog'lanish tartibida)
+  await prisma.returnItem.deleteMany();
+  await prisma.return.deleteMany();
   await prisma.saleItem.deleteMany();
   await prisma.sale.deleteMany();
   await prisma.batch.deleteMany();
   await prisma.product.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.pharmacy.deleteMany();
+
+  // SaaS egasi (barcha aptekalarni boshqaradi)
+  await prisma.user.create({
+    data: {
+      username: process.env.SUPERADMIN_USERNAME ?? 'superadmin',
+      passwordHash: await bcrypt.hash(
+        process.env.SUPERADMIN_PASSWORD ?? 'superadmin123',
+        10,
+      ),
+      name: 'Super Admin',
+      role: 'SUPERADMIN',
+      pharmacyId: null,
+    },
+  });
+
+  // Namuna apteka (tenant) + uning admin/kassiri
+  const pharmacy = await prisma.pharmacy.create({
+    data: {
+      name: 'Namuna Apteka',
+      ownerName: 'Demo Egasi',
+      phone: '+998 90 000 00 00',
+      status: 'ACTIVE',
+      subscriptionEndsAt: monthsFromNow(1),
+    },
+  });
+
+  await prisma.user.createMany({
+    data: [
+      {
+        pharmacyId: pharmacy.id,
+        username: 'admin',
+        passwordHash: await bcrypt.hash('admin123', 10),
+        name: 'Apteka Admini',
+        role: 'ADMIN',
+      },
+      {
+        pharmacyId: pharmacy.id,
+        username: 'kassir',
+        passwordHash: await bcrypt.hash('kassir123', 10),
+        name: 'Kassir',
+        role: 'CASHIER',
+      },
+    ],
+  });
 
   // Eslatma: batch.packs — kelgan pachka soni. Qoldiq donada saqlanadi
   // (quantity = packs × unitsPerPack). Narxlar — pachka narxlari.
@@ -79,8 +131,10 @@ async function main(): Promise<void> {
     await prisma.product.create({
       data: {
         ...productData,
+        pharmacyId: pharmacy.id,
         batches: {
           create: batches.map((b, i) => ({
+            pharmacyId: pharmacy.id,
             batchNumber: `B-${productData.barcode}-${i + 1}`,
             expiryDate: monthsFromNow(b.months),
             quantity: b.packs * productData.unitsPerPack, // donada
@@ -93,6 +147,9 @@ async function main(): Promise<void> {
   }
 
   console.log('Seed muvaffaqiyatli yakunlandi.');
+  console.log('  SUPERADMIN: superadmin / superadmin123');
+  console.log('  Apteka admin: admin / admin123');
+  console.log('  Apteka kassir: kassir / kassir123');
 }
 
 main()

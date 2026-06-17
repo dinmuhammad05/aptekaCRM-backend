@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { requirePharmacyId } from '../common/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { ImportStockDto } from './dto/import-stock.dto';
@@ -33,6 +34,7 @@ export class InventoryService {
 
     return this.prisma.batch.create({
       data: {
+        pharmacyId: requirePharmacyId(),
         productId: dto.productId,
         batchNumber: dto.batchNumber,
         expiryDate: new Date(dto.expiryDate),
@@ -50,21 +52,28 @@ export class InventoryService {
    * xato bersa, hammasi bekor qilinadi.
    */
   async importStock(dto: ImportStockDto) {
+    const pharmacyId = requirePharmacyId();
     return this.prisma.$transaction(async (tx) => {
       let createdProducts = 0;
       let createdBatches = 0;
 
       for (const [index, item] of dto.items.entries()) {
-        const product = await this.resolveProduct(tx, item, index);
+        const product = await this.resolveProduct(tx, item, index, pharmacyId);
 
         // Narx pasayishidan himoya: mavjud doriga yangi narx joriy (FEFO)
         // sotuv narxidan past kelsa — eski (yuqori) narx saqlanadi va kassirga
         // ogohlantirish xabari yoziladi. Yangi dorida taqqoslash bo'lmaydi.
-        const effectiveSell = await this.resolvePriceWithGuard(tx, product, item);
+        const effectiveSell = await this.resolvePriceWithGuard(
+          tx,
+          product,
+          item,
+          pharmacyId,
+        );
 
         const quantity = item.packs * product.unitsPerPack;
         await tx.batch.create({
           data: {
+            pharmacyId,
             productId: product.id,
             batchNumber: item.batchNumber,
             expiryDate: new Date(item.expiryDate),
@@ -86,6 +95,7 @@ export class InventoryService {
     tx: Prisma.TransactionClient,
     item: ImportStockDto['items'][number],
     index: number,
+    pharmacyId: number,
   ) {
     if (item.productId) {
       const product = await tx.product.findUnique({
@@ -107,6 +117,7 @@ export class InventoryService {
 
     return tx.product.create({
       data: {
+        pharmacyId,
         name: item.name.trim(),
         manufacturer: item.manufacturer,
         form: item.form,
@@ -126,6 +137,7 @@ export class InventoryService {
     tx: Prisma.TransactionClient,
     product: { id: number; name: string },
     item: ImportStockDto['items'][number],
+    pharmacyId: number,
   ): Promise<number> {
     if (!item.productId) return item.sellPrice;
 
@@ -140,6 +152,7 @@ export class InventoryService {
 
     await tx.notification.create({
       data: {
+        pharmacyId,
         type: 'PRICE_DROP',
         productId: product.id,
         productName: product.name,

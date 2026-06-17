@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { computePiecePrice } from '../common/pricing';
+import { requirePharmacyId } from '../common/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ImportCatalogDto } from './dto/import-catalog.dto';
@@ -35,7 +36,9 @@ export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
   create(dto: CreateProductDto) {
-    return this.prisma.product.create({ data: dto });
+    return this.prisma.product.create({
+      data: { ...dto, pharmacyId: requirePharmacyId() },
+    });
   }
 
   /**
@@ -46,6 +49,7 @@ export class ProductsService {
    */
   async importCatalog(dto: ImportCatalogDto) {
     const total = dto.items.length;
+    const pharmacyId = requirePharmacyId();
 
     // Bazadagi mavjud nomlar (normallashtirilgan) — qaytadan kiritmaslik uchun
     const existing = await this.prisma.product.findMany({
@@ -55,6 +59,7 @@ export class ProductsService {
 
     const seen = new Set<string>();
     const toCreate: {
+      pharmacyId: number;
       name: string;
       defaultCostPrice?: number;
       unitsPerPack?: number;
@@ -72,6 +77,7 @@ export class ProductsService {
       seen.add(key);
       const name = item.name.trim();
       toCreate.push({
+        pharmacyId,
         name,
         defaultCostPrice: item.defaultCostPrice,
         // Nomdagi "№N" dan pachka hajmi avtomatik aniqlanadi (topilmasa 1)
@@ -85,6 +91,7 @@ export class ProductsService {
     if (skippedNames.length > 0) {
       await this.prisma.notification.createMany({
         data: skippedNames.map((name) => ({
+          pharmacyId,
           type: 'CATALOG_SKIPPED',
           productName: name,
         })),
@@ -95,7 +102,7 @@ export class ProductsService {
   }
 
   /** Katalog ro'yxati, ixtiyoriy qidiruv (nom yoki barcode bo'yicha) */
-  
+
   findAll(search?: string) {
     const where: Prisma.ProductWhereInput = search
       ? {
@@ -140,7 +147,10 @@ export class ProductsService {
     });
 
     return products.map((product) => {
-      const totalStock = product.batches.reduce((sum, b) => sum + b.quantity, 0);
+      const totalStock = product.batches.reduce(
+        (sum, b) => sum + b.quantity,
+        0,
+      );
       const currentBatch = product.batches[0] ?? null;
       const packPrice = currentBatch ? currentBatch.sellPrice : null;
       return {
@@ -170,7 +180,9 @@ export class ProductsService {
    * sellPrice — eng yaqin muddatli partiyadan olinadi (FEFO bilan mos).
    */
   async findByBarcode(barcode: string) {
-    const product = await this.prisma.product.findUnique({
+    // barcode endi apteka ichida unique (global emas) — findFirst ishlatamiz;
+    // tenant filtri Prisma middleware orqali avtomatik qo'shiladi
+    const product = await this.prisma.product.findFirst({
       where: { barcode },
       include: {
         batches: {

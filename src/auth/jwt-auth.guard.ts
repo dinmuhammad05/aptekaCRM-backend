@@ -37,12 +37,14 @@ export class JwtAuthGuard implements CanActivate {
       const payload = this.jwt.verify<{
         sub: number;
         username: string;
-        role: 'ADMIN' | 'CASHIER';
+        role: 'SUPERADMIN' | 'ADMIN' | 'CASHIER';
+        pharmacyId: number | null;
       }>(header.slice(7));
       (req as Request & { user: unknown }).user = {
         id: payload.sub,
         username: payload.username,
         role: payload.role,
+        pharmacyId: payload.pharmacyId ?? null,
       };
       return true;
     } catch {

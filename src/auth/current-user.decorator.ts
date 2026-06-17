@@ -6,6 +6,8 @@ export interface AuthUser {
   id: number;
   username: string;
   role: Role;
+  /** Tegishli apteka IDsi. SUPERADMIN uchun null. */
+  pharmacyId: number | null;
 }
 
 export const CurrentUser = createParamDecorator(

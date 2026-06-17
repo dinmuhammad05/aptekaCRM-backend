@@ -20,25 +20,33 @@ export class AuthService implements OnModuleInit {
 
   /**
    * Ilova ishga tushganda, agar foydalanuvchilar umuman bo'lmasa, boshlang'ich
-   * admin yaratiladi (env: ADMIN_USERNAME/ADMIN_PASSWORD). Idempotent — mavjud
-   * ma'lumotga tegmaydi (destruktiv seed ishlatilmaydi).
+   * SUPERADMIN (SaaS egasi) yaratiladi (env: SUPERADMIN_USERNAME/PASSWORD).
+   * SUPERADMIN aptekaga bog'lanmaydi (pharmacyId = null) va barcha aptekalarni
+   * boshqaradi. Idempotent — mavjud ma'lumotga tegmaydi.
    */
   async onModuleInit(): Promise<void> {
     const count = await this.prisma.user.count();
     if (count > 0) return;
 
-    const username = process.env.ADMIN_USERNAME ?? 'admin';
-    const password = process.env.ADMIN_PASSWORD ?? 'admin123';
+    const username = process.env.SUPERADMIN_USERNAME ?? 'superadmin';
+    const password = process.env.SUPERADMIN_PASSWORD ?? 'superadmin123';
     const passwordHash = await bcrypt.hash(password, 10);
     await this.prisma.user.create({
-      data: { username, passwordHash, name: 'Administrator', role: 'ADMIN' },
+      data: {
+        username,
+        passwordHash,
+        name: 'Super Admin',
+        role: 'SUPERADMIN',
+        pharmacyId: null,
+      },
     });
-    this.logger.log(`Boshlang'ich admin yaratildi (login: ${username})`);
+    this.logger.log(`Boshlang'ich SUPERADMIN yaratildi (login: ${username})`);
   }
 
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
       where: { username: dto.username },
+      include: { pharmacy: true },
     });
     if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
       throw new UnauthorizedException("Login yoki parol noto'g'ri");
@@ -48,24 +56,51 @@ export class AuthService implements OnModuleInit {
       sub: user.id,
       username: user.username,
       role: user.role,
+      pharmacyId: user.pharmacyId,
     });
     return {
       token,
-      user: {
-        id: user.id,
-        username: user.username,
-        name: user.name,
-        role: user.role,
-      },
+      user: this.publicUser(user),
     };
   }
 
   async me(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, username: true, name: true, role: true },
+      include: { pharmacy: true },
     });
     if (!user) throw new UnauthorizedException();
-    return user;
+    return this.publicUser(user);
+  }
+
+  /** Frontendga yuboriladigan xavfsiz foydalanuvchi shakli (apteka holati bilan). */
+  private publicUser(user: {
+    id: number;
+    username: string;
+    name: string | null;
+    role: string;
+    pharmacyId: number | null;
+    pharmacy: {
+      id: number;
+      name: string;
+      status: string;
+      subscriptionEndsAt: Date | null;
+    } | null;
+  }) {
+    return {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      role: user.role,
+      pharmacyId: user.pharmacyId,
+      pharmacy: user.pharmacy
+        ? {
+            id: user.pharmacy.id,
+            name: user.pharmacy.name,
+            status: user.pharmacy.status,
+            subscriptionEndsAt: user.pharmacy.subscriptionEndsAt,
+          }
+        : null,
+    };
   }
 }

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, SaleUnit } from '@prisma/client';
 import { computePiecePrice } from '../common/pricing';
+import { requirePharmacyId } from '../common/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSaleDto, DiscountType } from './dto/create-sale.dto';
 import { ReturnSaleDto } from './dto/return-sale.dto';
@@ -20,6 +21,7 @@ export class SalesService {
    * Qoldiq yetmasa — butun tranzaksiya bekor qilinadi.
    */
   async create(dto: CreateSaleDto, userId?: number) {
+    const pharmacyId = requirePharmacyId();
     // Muddati o'tgan dorini sotib bo'lmaydi: bugundan oldingi partiyalar hisobga
     // olinmaydi (sana bo'yicha, vaqtsiz)
     const today = new Date();
@@ -34,9 +36,7 @@ export class SalesService {
           where: { id: item.productId },
         });
         if (!product) {
-          throw new NotFoundException(
-            `Dori topilmadi (id=${item.productId})`,
-          );
+          throw new NotFoundException(`Dori topilmadi (id=${item.productId})`);
         }
 
         // Sotilgan birlikni donaga o'tkazamiz: PACK bo'lsa pachkadagi
@@ -110,6 +110,7 @@ export class SalesService {
 
       return tx.sale.create({
         data: {
+          pharmacyId,
           subtotal,
           discount,
           total,
@@ -178,6 +179,7 @@ export class SalesService {
    *  - Return + ReturnItem yozuvlarini yaratadi.
    */
   async returnSale(saleId: number, dto: ReturnSaleDto, userId?: number) {
+    const pharmacyId = requirePharmacyId();
     return this.prisma.$transaction(async (tx) => {
       const sale = await tx.sale.findUnique({
         where: { id: saleId },
@@ -236,6 +238,7 @@ export class SalesService {
 
       return tx.return.create({
         data: {
+          pharmacyId,
           saleId,
           userId,
           total,

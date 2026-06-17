@@ -14,9 +14,7 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get()
-  list(
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-  ) {
+  list(@Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number) {
     return this.notificationsService.list(limit);
   }
 
