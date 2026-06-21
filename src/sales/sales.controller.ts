@@ -38,8 +38,10 @@ export class SalesController {
   findAll(
     @Query('take', new DefaultValuePipe(50), ParseIntPipe) take: number,
     @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
-    return this.salesService.findAll(take, skip);
+    return this.salesService.findAll(take, skip, from, to);
   }
 
   @Get('stats')

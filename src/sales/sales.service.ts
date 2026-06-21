@@ -151,8 +151,25 @@ export class SalesService {
    * Tarix vaqt o'tib cheksiz o'sgani uchun limit majburiy: standart 50,
    * maksimal 200 (butun jadvalni bir so'rovda yuklab olishning oldini oladi).
    */
-  findAll(take = 50, skip = 0) {
+  findAll(take = 50, skip = 0, from?: string, to?: string) {
+    // Sana filteri ixtiyoriy: from/to berilsa createdAt bo'yicha cheklaymiz
+    const where: Prisma.SaleWhereInput = {};
+    if (from || to) {
+      const createdAt: Prisma.DateTimeFilter = {};
+      if (from) {
+        const start = new Date(from);
+        start.setHours(0, 0, 0, 0);
+        createdAt.gte = start;
+      }
+      if (to) {
+        const end = new Date(to);
+        end.setHours(23, 59, 59, 999);
+        createdAt.lte = end;
+      }
+      where.createdAt = createdAt;
+    }
     return this.prisma.sale.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       take: Math.min(Math.max(take, 1), 200),
       skip: Math.max(skip, 0),
