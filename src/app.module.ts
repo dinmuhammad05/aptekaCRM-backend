@@ -8,6 +8,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SalesModule } from './sales/sales.module';
 import { AuthModule } from './auth/auth.module';
 import { SuperadminModule } from './superadmin/superadmin.module';
+import { PacketsModule } from './packets/packets.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { SuperadminModule } from './superadmin/superadmin.module';
     NotificationsModule,
     SalesModule,
     SuperadminModule,
+    PacketsModule,
   ],
 })
 export class AppModule implements NestModule {
