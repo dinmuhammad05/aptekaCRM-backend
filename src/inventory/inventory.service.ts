@@ -8,6 +8,7 @@ import { requirePharmacyId } from '../common/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { ImportStockDto } from './dto/import-stock.dto';
+import { InitialStockDto } from './dto/initial-stock.dto';
 import { ReceiveStockDto } from './dto/receive-stock.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
 
@@ -42,6 +43,58 @@ export class InventoryService {
         costPrice: dto.costPrice,
         sellPrice: dto.sellPrice,
       },
+    });
+  }
+
+  /**
+   * Boshlang'ich qoldiq (inventarizatsiya) — bitta dori uchun barcode'ni
+   * (agar berilgan bo'lsa) kartaga yozadi va bitta partiya ochadi. Ikkalasi
+   * bitta tranzaksiyada — barcode to'qnashuvi (P2002) bo'lsa hammasi bekor
+   * qilinadi. `expiryDate` berilmasa bugundan +2 yil, `costPrice` berilmasa
+   * dorining `defaultCostPrice` qiymati (yoki 0) ishlatiladi.
+   */
+  async initialStock(dto: InitialStockDto) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: dto.productId },
+    });
+    if (!product) {
+      throw new NotFoundException(`Dori topilmadi (id=${dto.productId})`);
+    }
+
+    const quantity = dto.packs * product.unitsPerPack;
+    if (quantity <= 0) {
+      throw new BadRequestException("Miqdor 0 dan katta bo'lishi kerak");
+    }
+
+    // Muddat berilmasa — bugundan +2 yil (onboarding qoldig'i sotiladigan bo'lsin)
+    const expiryDate = dto.expiryDate
+      ? new Date(dto.expiryDate)
+      : (() => {
+          const d = new Date();
+          d.setFullYear(d.getFullYear() + 2);
+          return d;
+        })();
+    const costPrice =
+      dto.costPrice ?? Number(product.defaultCostPrice ?? 0);
+
+    return this.prisma.$transaction(async (tx) => {
+      // Barcode berilgan va o'zgargan bo'lsa — kartaga yozamiz
+      if (dto.barcode && dto.barcode !== product.barcode) {
+        await tx.product.update({
+          where: { id: product.id },
+          data: { barcode: dto.barcode },
+        });
+      }
+      return tx.batch.create({
+        data: {
+          pharmacyId: requirePharmacyId(),
+          productId: product.id,
+          expiryDate,
+          quantity,
+          costPrice,
+          sellPrice: dto.sellPrice,
+        },
+      });
     });
   }
 

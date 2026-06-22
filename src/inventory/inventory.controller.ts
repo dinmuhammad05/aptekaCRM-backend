@@ -14,6 +14,7 @@ import { Role } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { ImportStockDto } from './dto/import-stock.dto';
+import { InitialStockDto } from './dto/initial-stock.dto';
 import { ReceiveStockDto } from './dto/receive-stock.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
 import { InventoryService } from './inventory.service';
@@ -30,6 +31,13 @@ export class InventoryController {
   @Post('import')
   importStock(@Body() dto: ImportStockDto) {
     return this.inventoryService.importStock(dto);
+  }
+
+  /** Boshlang'ich qoldiq — dori kartasiga barcode + bitta partiya (faqat admin) */
+  @Post('initial-stock')
+  @Roles(Role.ADMIN)
+  initialStock(@Body() dto: InitialStockDto) {
+    return this.inventoryService.initialStock(dto);
   }
 
   @Post('adjust')
