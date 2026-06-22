@@ -1,12 +1,14 @@
 import {
   Body,
   Controller,
+  DefaultValuePipe,
   Delete,
   Get,
   Param,
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
@@ -34,8 +36,13 @@ export class PacketsAdminController {
   }
 
   @Get(':id')
-  getOne(@Param('id', ParseIntPipe) id: number) {
-    return this.packets.getPacket(id);
+  getOne(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('take', new DefaultValuePipe(50), ParseIntPipe) take: number,
+    @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+    @Query('search') search?: string,
+  ) {
+    return this.packets.getPacketPaged(id, { take, skip, search });
   }
 
   @Patch(':id')

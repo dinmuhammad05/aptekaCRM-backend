@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { requirePharmacyId } from '../common/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePacketDto, UpdatePacketDto } from './dto/packet.dto';
@@ -44,6 +45,44 @@ export class PacketsService {
       throw new NotFoundException(`Packet topilmadi (id=${id})`);
     }
     return packet;
+  }
+
+  /**
+   * Bitta packet + dorilari (sahifalangan). `search` berilsa nom/barcode
+   * bo'yicha filtrlaydi. Javobda joriy sahifa dorilari va umumiy son (`total`).
+   */
+  async getPacketPaged(
+    id: number,
+    opts: { take?: number; skip?: number; search?: string },
+  ) {
+    const packet = await this.prisma.packet.findUnique({ where: { id } });
+    if (!packet) {
+      throw new NotFoundException(`Packet topilmadi (id=${id})`);
+    }
+    const take = Math.min(Math.max(opts.take ?? 50, 1), 200);
+    const skip = Math.max(opts.skip ?? 0, 0);
+    const q = opts.search?.trim();
+    const where: Prisma.PacketItemWhereInput = {
+      packetId: id,
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' } },
+              { barcode: { contains: q, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.packetItem.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        take,
+        skip,
+      }),
+      this.prisma.packetItem.count({ where }),
+    ]);
+    return { ...packet, items, total };
   }
 
   createPacket(dto: CreatePacketDto) {
