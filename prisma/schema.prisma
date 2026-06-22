@@ -143,6 +143,7 @@ model User {
   username     String    @unique
   passwordHash String
   name         String?
+  avatarUrl    String? // profil rasmi (base64 data URL, kichik o'lchamga siqilgan)
   role         Role      @default(CASHIER)
   createdAt    DateTime  @default(now())
   sales        Sale[]

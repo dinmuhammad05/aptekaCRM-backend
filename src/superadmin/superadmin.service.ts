@@ -1,9 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PharmacyStatus, Prisma } from '@prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PharmacyStatus, Prisma, SaleUnit } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { computePiecePrice } from '../common/pricing';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePharmacyDto } from './dto/create-pharmacy.dto';
 import { UpdatePharmacyDto } from './dto/update-pharmacy.dto';
+import { UpdatePharmacyUserDto } from './dto/update-pharmacy-user.dto';
 
 /** Obuna holati (sana asosida hisoblanadi) */
 type SubscriptionState = 'NONE' | 'ACTIVE' | 'EXPIRING' | 'EXPIRED';
@@ -306,6 +312,114 @@ export class SuperadminService {
       data: { read: true },
     });
     return { ok: true };
+  }
+
+  /**
+   * Bitta apteka bo'yicha savdo statistikasi (sana oralig'i bilan).
+   * Superadmin tenant-scope'dan tashqari, shuning uchun pharmacyId qo'lda filtr.
+   */
+  async pharmacySalesStats(id: number, from?: string, to?: string) {
+    await this.getPharmacy(id);
+    const start = from ? new Date(from) : null;
+    const end = to ? new Date(to) : null;
+    if (start) start.setHours(0, 0, 0, 0);
+    if (end) end.setHours(23, 59, 59, 999);
+
+    const sales = await this.prisma.sale.findMany({
+      where: {
+        pharmacyId: id,
+        ...(start || end
+          ? {
+              createdAt: {
+                ...(start && { gte: start }),
+                ...(end && { lte: end }),
+              },
+            }
+          : {}),
+      },
+      include: { items: { include: { batch: true, product: true } } },
+    });
+
+    let revenue = new Prisma.Decimal(0);
+    let cost = new Prisma.Decimal(0);
+    let itemsSold = 0;
+    for (const sale of sales) {
+      revenue = revenue.add(sale.total);
+      for (const item of sale.items) {
+        const unitCost =
+          item.unit === SaleUnit.PACK
+            ? item.batch.costPrice
+            : computePiecePrice(item.batch.costPrice, item.product.unitsPerPack);
+        cost = cost.add(unitCost.mul(item.quantity));
+        itemsSold +=
+          item.unit === SaleUnit.PACK
+            ? item.quantity * item.product.unitsPerPack
+            : item.quantity;
+      }
+    }
+
+    return {
+      revenue: revenue.toFixed(2),
+      cost: cost.toFixed(2),
+      profit: revenue.sub(cost).toFixed(2),
+      salesCount: sales.length,
+      itemsSold,
+    };
+  }
+
+  /** Apteka foydalanuvchilari ro'yxati (login boshqaruvi uchun) */
+  async listPharmacyUsers(id: number) {
+    await this.getPharmacy(id);
+    return this.prisma.user.findMany({
+      where: { pharmacyId: id },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        role: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /** Apteka foydalanuvchisining login/parol/ismini yangilash */
+  async updatePharmacyUser(
+    pharmacyId: number,
+    userId: number,
+    dto: UpdatePharmacyUserDto,
+  ) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, pharmacyId },
+    });
+    if (!user) {
+      throw new NotFoundException('Foydalanuvchi topilmadi');
+    }
+    if (
+      dto.username === undefined &&
+      dto.password === undefined &&
+      dto.name === undefined
+    ) {
+      throw new BadRequestException("O'zgartirish uchun maydon kiritilmadi");
+    }
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.username !== undefined && { username: dto.username }),
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.password !== undefined && {
+          passwordHash: await bcrypt.hash(dto.password, 10),
+        }),
+      },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+    return updated;
   }
 
   private async getPharmacy(id: number) {

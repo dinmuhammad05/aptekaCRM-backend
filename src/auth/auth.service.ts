@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   OnModuleInit,
@@ -7,7 +8,9 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -73,11 +76,37 @@ export class AuthService implements OnModuleInit {
     return this.publicUser(user);
   }
 
+  /** O'z profilini (ism, avatar) yangilash — barcha rollar uchun */
+  async updateProfile(id: number, dto: UpdateProfileDto) {
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.avatarUrl !== undefined && { avatarUrl: dto.avatarUrl }),
+      },
+    });
+    return this.me(id);
+  }
+
+  /** O'z parolini o'zgartirish — joriy parolni tekshirib */
+  async changePassword(id: number, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new UnauthorizedException();
+    const ok = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!ok) {
+      throw new BadRequestException("Joriy parol noto'g'ri");
+    }
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    await this.prisma.user.update({ where: { id }, data: { passwordHash } });
+    return { success: true };
+  }
+
   /** Frontendga yuboriladigan xavfsiz foydalanuvchi shakli (apteka holati bilan). */
   private publicUser(user: {
     id: number;
     username: string;
     name: string | null;
+    avatarUrl: string | null;
     role: string;
     pharmacyId: number | null;
     pharmacy: {
@@ -91,6 +120,7 @@ export class AuthService implements OnModuleInit {
       id: user.id,
       username: user.username,
       name: user.name,
+      avatarUrl: user.avatarUrl,
       role: user.role,
       pharmacyId: user.pharmacyId,
       pharmacy: user.pharmacy

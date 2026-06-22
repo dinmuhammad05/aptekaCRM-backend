@@ -14,6 +14,7 @@ import { Roles } from '../auth/roles.decorator';
 import { CreatePharmacyDto } from './dto/create-pharmacy.dto';
 import { ExtendSubscriptionDto } from './dto/extend-subscription.dto';
 import { UpdatePharmacyDto } from './dto/update-pharmacy.dto';
+import { UpdatePharmacyUserDto } from './dto/update-pharmacy-user.dto';
 import { SuperadminService } from './superadmin.service';
 
 /** SaaS egasi (SUPERADMIN) uchun — aptekalar va obunalarni boshqarish */
@@ -74,6 +75,32 @@ export class SuperadminController {
   @Get('sales-overview')
   salesOverview() {
     return this.superadmin.salesOverview();
+  }
+
+  /** Bitta apteka savdo statistikasi (sana oralig'i: from/to) */
+  @Get('pharmacies/:id/sales-stats')
+  pharmacySalesStats(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.superadmin.pharmacySalesStats(id, from, to);
+  }
+
+  /** Apteka foydalanuvchilari ro'yxati */
+  @Get('pharmacies/:id/users')
+  pharmacyUsers(@Param('id', ParseIntPipe) id: number) {
+    return this.superadmin.listPharmacyUsers(id);
+  }
+
+  /** Apteka foydalanuvchisining login/parol/ismini yangilash */
+  @Patch('pharmacies/:id/users/:userId')
+  updatePharmacyUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('userId', ParseIntPipe) userId: number,
+    @Body() dto: UpdatePharmacyUserDto,
+  ) {
+    return this.superadmin.updatePharmacyUser(id, userId, dto);
   }
 
   @Get('notifications')
