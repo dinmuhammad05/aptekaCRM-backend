@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE "Sale" ADD COLUMN     "discount" DECIMAL(12,2) NOT NULL DEFAULT 0,
-ADD COLUMN     "subtotal" DECIMAL(12,2) NOT NULL DEFAULT 0;
