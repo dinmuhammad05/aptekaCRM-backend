@@ -27,6 +27,7 @@ model Pharmacy {
   phone              String? // bog'lanish raqami
   status             PharmacyStatus @default(ACTIVE)
   subscriptionEndsAt DateTime? // obuna tugash sanasi (null = muddatsiz)
+  monthlyPrice       Decimal?       @db.Decimal(12, 2) // oylik obuna narxi (SaaS)
   note               String? // admin uchun izoh
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
@@ -37,8 +38,23 @@ model Pharmacy {
   sales         Sale[]
   returns       Return[]
   notifications Notification[]
+  payments      SubscriptionPayment[]
 
   @@index([status])
+}
+
+/// Obuna to'lovi — superadmin obunani uzaytirganda yoziladi (SaaS daromadi).
+/// Global jadval (faqat superadmin ishlatadi), tenant izolyatsiyasidan tashqari.
+model SubscriptionPayment {
+  id         Int      @id @default(autoincrement())
+  pharmacy   Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  pharmacyId Int
+  months     Int // qancha oyga uzaytirildi
+  amount     Decimal  @db.Decimal(12, 2) // to'langan summa (monthlyPrice * months)
+  createdAt  DateTime @default(now())
+
+  @@index([pharmacyId])
+  @@index([createdAt])
 }
 
 /// Dori katalogi (mahsulot kartochkasi)

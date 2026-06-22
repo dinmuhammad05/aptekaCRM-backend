@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PharmacyStatus } from '@prisma/client';
+import { PharmacyStatus, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePharmacyDto } from './dto/create-pharmacy.dto';
@@ -54,6 +54,7 @@ export class SuperadminService {
       status: p.status,
       subscriptionEndsAt: p.subscriptionEndsAt,
       subscriptionState: this.subscriptionState(p.subscriptionEndsAt),
+      monthlyPrice: p.monthlyPrice,
       note: p.note,
       createdAt: p.createdAt,
       counts: p._count,
@@ -96,6 +97,7 @@ export class SuperadminService {
           subscriptionEndsAt: dto.subscriptionEndsAt
             ? new Date(dto.subscriptionEndsAt)
             : null,
+          monthlyPrice: dto.monthlyPrice ?? null,
         },
       });
 
@@ -127,8 +129,114 @@ export class SuperadminService {
             ? new Date(dto.subscriptionEndsAt)
             : null,
         }),
+        ...(dto.monthlyPrice !== undefined && {
+          monthlyPrice: dto.monthlyPrice,
+        }),
       },
     });
+  }
+
+  /**
+   * Obunani N oyga uzaytiradi: yangi tugash sanasi joriy tugash sanasidan
+   * (agar hali faol bo'lsa) yoki bugundan boshlab hisoblanadi. SaaS daromadi
+   * sifatida to'lov (monthlyPrice * months) yoziladi va apteka faollashtiriladi.
+   */
+  async extendSubscription(id: number, months: number) {
+    const pharmacy = await this.getPharmacy(id);
+    const now = new Date();
+    const base =
+      pharmacy.subscriptionEndsAt && pharmacy.subscriptionEndsAt > now
+        ? new Date(pharmacy.subscriptionEndsAt)
+        : new Date(now);
+    const newEnd = new Date(base);
+    newEnd.setMonth(newEnd.getMonth() + months);
+
+    const price = pharmacy.monthlyPrice ?? new Prisma.Decimal(0);
+    const amount = new Prisma.Decimal(price).mul(months);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.subscriptionPayment.create({
+        data: { pharmacyId: id, months, amount },
+      });
+      const updated = await tx.pharmacy.update({
+        where: { id },
+        data: { subscriptionEndsAt: newEnd, status: 'ACTIVE' },
+      });
+      // Tegishli muddat xabarlarini o'qilgan deb belgilaymiz
+      await tx.notification.updateMany({
+        where: {
+          pharmacyId: null,
+          type: 'SUBSCRIPTION_EXPIRED',
+          productId: id,
+        },
+        data: { read: true },
+      });
+      return updated;
+    });
+  }
+
+  /** SaaS obuna daromadi: jami, shu oy, oxirgi to'lovlar */
+  async revenueStats() {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const [allAgg, monthAgg, recent] = await Promise.all([
+      this.prisma.subscriptionPayment.aggregate({
+        _sum: { amount: true },
+        _count: true,
+      }),
+      this.prisma.subscriptionPayment.aggregate({
+        _sum: { amount: true },
+        _count: true,
+        where: { createdAt: { gte: monthStart } },
+      }),
+      this.prisma.subscriptionPayment.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        include: { pharmacy: { select: { name: true } } },
+      }),
+    ]);
+    return {
+      total: allAgg._sum.amount ?? new Prisma.Decimal(0),
+      totalCount: allAgg._count,
+      thisMonth: monthAgg._sum.amount ?? new Prisma.Decimal(0),
+      thisMonthCount: monthAgg._count,
+      recent: recent.map((p) => ({
+        id: p.id,
+        pharmacyName: p.pharmacy.name,
+        months: p.months,
+        amount: p.amount,
+        createdAt: p.createdAt,
+      })),
+    };
+  }
+
+  /** Aptekalar savdosi: har apteka bo'yicha sotuvlar soni va aylanma + jami */
+  async salesOverview() {
+    const grouped = await this.prisma.sale.groupBy({
+      by: ['pharmacyId'],
+      _sum: { total: true },
+      _count: { _all: true },
+    });
+    const pharmacies = await this.prisma.pharmacy.findMany({
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(pharmacies.map((p) => [p.id, p.name]));
+
+    const rows = grouped
+      .map((g) => ({
+        pharmacyId: g.pharmacyId,
+        name: nameById.get(g.pharmacyId) ?? `#${g.pharmacyId}`,
+        sales: g._count._all,
+        turnover: g._sum.total ?? new Prisma.Decimal(0),
+      }))
+      .sort((a, b) => Number(b.turnover) - Number(a.turnover));
+
+    const totalSales = rows.reduce((s, r) => s + r.sales, 0);
+    const totalTurnover = rows.reduce(
+      (s, r) => s.add(r.turnover),
+      new Prisma.Decimal(0),
+    );
+    return { totalSales, totalTurnover, rows };
   }
 
   /** Aptekani bloklash yoki faollashtirish */

@@ -12,6 +12,7 @@ import {
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
 import { CreatePharmacyDto } from './dto/create-pharmacy.dto';
+import { ExtendSubscriptionDto } from './dto/extend-subscription.dto';
 import { UpdatePharmacyDto } from './dto/update-pharmacy.dto';
 import { SuperadminService } from './superadmin.service';
 
@@ -52,6 +53,27 @@ export class SuperadminController {
   @Patch('pharmacies/:id/activate')
   activate(@Param('id', ParseIntPipe) id: number) {
     return this.superadmin.setStatus(id, 'ACTIVE');
+  }
+
+  /** Obunani N oyga uzaytirish (1/2/3 oy tugmalari) */
+  @Post('pharmacies/:id/extend')
+  extend(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ExtendSubscriptionDto,
+  ) {
+    return this.superadmin.extendSubscription(id, dto.months);
+  }
+
+  /** SaaS obuna daromadi statistikasi */
+  @Get('revenue')
+  revenue() {
+    return this.superadmin.revenueStats();
+  }
+
+  /** Aptekalar savdosi (aylanma) statistikasi */
+  @Get('sales-overview')
+  salesOverview() {
+    return this.superadmin.salesOverview();
   }
 
   @Get('notifications')

@@ -1,10 +1,13 @@
 import {
   IsDateString,
+  IsNumber,
   IsOptional,
   IsString,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 /** Yangi apteka (tenant) + uning admin foydalanuvchisini yaratish */
 export class CreatePharmacyDto {
@@ -27,6 +30,13 @@ export class CreatePharmacyDto {
   @IsOptional()
   @IsDateString()
   subscriptionEndsAt?: string;
+
+  /** Oylik obuna narxi (SaaS daromadi uchun) */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  monthlyPrice?: number;
 
   @IsOptional()
   @IsString()

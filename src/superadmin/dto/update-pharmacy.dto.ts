@@ -1,10 +1,13 @@
 import {
   IsDateString,
+  IsNumber,
   IsOptional,
   IsString,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 /** Apteka ma'lumotlari va obuna sanasini yangilash */
 export class UpdatePharmacyDto {
@@ -28,6 +31,13 @@ export class UpdatePharmacyDto {
   @IsOptional()
   @IsDateString()
   subscriptionEndsAt?: string | null;
+
+  /** Oylik obuna narxi (SaaS daromadi uchun) */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  monthlyPrice?: number | null;
 
   @IsOptional()
   @IsString()
