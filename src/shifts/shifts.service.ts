@@ -10,7 +10,7 @@ import { CloseShiftDto } from './dto/close-shift.dto';
 import { OpenShiftDto } from './dto/open-shift.dto';
 
 /** Smena bo'yicha sotuvlar yig'indisi (X/Z hisobot) */
-interface ShiftReport {
+export interface ShiftReport {
   salesCount: number;
   revenue: string; // jami savdo (total)
   cashTotal: string; // naqd sotuvlardan tushgan (paid, CASH)
