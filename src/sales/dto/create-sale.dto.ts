@@ -49,4 +49,20 @@ export class CreateSaleDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   discountValue?: number; // PERCENT bo'lsa foiz, AMOUNT bo'lsa so'm
+
+  /** Nasiya (qarz) savdosida mijoz; berilmasa — oddiy to'liq to'langan savdo */
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  customerId?: number;
+
+  /**
+   * Sotuv paytida to'langan summa (so'm). Faqat `customerId` bilan ma'noli:
+   * qarz = total - paid. Berilmasa va mijoz bo'lsa — 0 (to'liq nasiya).
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  paid?: number;
 }

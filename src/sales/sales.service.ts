@@ -110,12 +110,40 @@ export class SalesService {
       );
       const total = subtotal.sub(discount);
 
+      // Nasiya (qarz): mijoz tanlangan bo'lsa, to'langan summa [0, total] ga
+      // chegaralanadi va qoldiq (total - paid) mijoz qarziga qo'shiladi.
+      // Mijozsiz savdo — to'liq to'langan deb hisoblanadi (paid = total).
+      let customerId: number | null = null;
+      let paid = total;
+      if (dto.customerId != null) {
+        const customer = await tx.customer.findFirst({
+          where: { id: dto.customerId },
+        });
+        if (!customer) {
+          throw new NotFoundException('Mijoz topilmadi');
+        }
+        customerId = customer.id;
+        paid = Prisma.Decimal.min(
+          total,
+          Prisma.Decimal.max(0, new Prisma.Decimal(dto.paid ?? 0)),
+        );
+        const debtDelta = total.sub(paid);
+        if (debtDelta.gt(0)) {
+          await tx.customer.update({
+            where: { id: customer.id },
+            data: { debt: { increment: debtDelta } },
+          });
+        }
+      }
+
       return tx.sale.create({
         data: {
           pharmacyId,
           subtotal,
           discount,
           total,
+          paid,
+          customerId,
           paymentType: dto.paymentType,
           userId,
           items: { createMany: { data: saleItemsData } },

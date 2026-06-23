@@ -34,6 +34,8 @@ const COLUMN_MODELS = new Set<string>([
   'Return',
   'Notification',
   'User',
+  'Customer',
+  'CustomerPayment',
 ]);
 
 /** Bog'lanish (relation) orqali scope qilinadigan modellar (faqat o'qish). */
