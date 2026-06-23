@@ -7,9 +7,13 @@ export class UpdateProfileDto {
   @MaxLength(120)
   name?: string;
 
-  /** Profil rasmi — base64 data URL yoki null (o'chirish). Kichik siqilган rasm. */
+  /**
+   * Profil rasmi — base64 data URL yoki null (o'chirish). Mijoz tomonida 256px
+   * kvadrat JPEG'ga siqiladi (~30-60 KB), shu sabab cheklov ~300 KB: har bir
+   * /auth/me javobida (sessiya tiklashda) katta blob yuborilmasligi uchun.
+   */
   @IsOptional()
   @IsString()
-  @MaxLength(1500000)
+  @MaxLength(300000)
   avatarUrl?: string | null;
 }

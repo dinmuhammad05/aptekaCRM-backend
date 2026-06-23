@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { Prisma, SaleUnit } from '@prisma/client';
 import { computePiecePrice } from '../common/pricing';
+import { startOfDay, endOfDay } from '../common/date';
+import { computeSalesStats } from '../common/sales-stats';
 import { requirePharmacyId } from '../common/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSaleDto, DiscountType } from './dto/create-sale.dto';
@@ -270,21 +272,8 @@ export class SalesService {
   private parseRange(from?: string, to?: string) {
     const start = from ? new Date(from) : new Date();
     if (!from) start.setDate(1);
-    start.setHours(0, 0, 0, 0);
     const end = to ? new Date(to) : new Date();
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  }
-
-  /** Bitta sotuv qatori uchun donadagi tannarx (PACK/PIECE) */
-  private unitCost(item: {
-    unit: SaleUnit;
-    batch: { costPrice: Prisma.Decimal };
-    product: { unitsPerPack: number };
-  }): Prisma.Decimal {
-    return item.unit === SaleUnit.PACK
-      ? item.batch.costPrice
-      : computePiecePrice(item.batch.costPrice, item.product.unitsPerPack);
+    return { start: startOfDay(start), end: endOfDay(end) };
   }
 
   /** Umumiy ko'rsatkichlar: savdo, tannarx, foyda, sotuvlar soni, sotilgan dona */
@@ -294,28 +283,7 @@ export class SalesService {
       where: { createdAt: { gte: start, lte: end } },
       include: { items: { include: { batch: true, product: true } } },
     });
-
-    let revenue = new Prisma.Decimal(0);
-    let cost = new Prisma.Decimal(0);
-    let itemsSold = 0;
-    for (const sale of sales) {
-      revenue = revenue.add(sale.total);
-      for (const item of sale.items) {
-        cost = cost.add(this.unitCost(item).mul(item.quantity));
-        itemsSold +=
-          item.unit === SaleUnit.PACK
-            ? item.quantity * item.product.unitsPerPack
-            : item.quantity;
-      }
-    }
-
-    return {
-      revenue: revenue.toFixed(2),
-      cost: cost.toFixed(2),
-      profit: revenue.sub(cost).toFixed(2),
-      salesCount: sales.length,
-      itemsSold,
-    };
+    return computeSalesStats(sales);
   }
 
   /** Eng ko'p sotilgan dorilar (savdo summasi bo'yicha) */

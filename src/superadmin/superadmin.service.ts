@@ -3,9 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PharmacyStatus, Prisma, SaleUnit } from '@prisma/client';
+import { PharmacyStatus, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { computePiecePrice } from '../common/pricing';
+import { addMonths, endOfDay, startOfDay } from '../common/date';
+import { computeSalesStats } from '../common/sales-stats';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePharmacyDto } from './dto/create-pharmacy.dto';
 import { UpdatePharmacyDto } from './dto/update-pharmacy.dto';
@@ -149,16 +150,21 @@ export class SuperadminService {
    */
   async extendSubscription(id: number, months: number) {
     const pharmacy = await this.getPharmacy(id);
+    // Narx belgilanmagan bo'lsa uzaytirmaymiz — aks holda 0 so'mlik "to'lov"
+    // yozilib, daromad statistikasi chalg'itadi (bepul uzaytirish bo'lib qoladi).
+    if (pharmacy.monthlyPrice == null) {
+      throw new BadRequestException(
+        "Avval aptekaning oylik obuna narxini belgilang",
+      );
+    }
     const now = new Date();
     const base =
       pharmacy.subscriptionEndsAt && pharmacy.subscriptionEndsAt > now
         ? new Date(pharmacy.subscriptionEndsAt)
-        : new Date(now);
-    const newEnd = new Date(base);
-    newEnd.setMonth(newEnd.getMonth() + months);
+        : now;
+    const newEnd = addMonths(base, months);
 
-    const price = pharmacy.monthlyPrice ?? new Prisma.Decimal(0);
-    const amount = new Prisma.Decimal(price).mul(months);
+    const amount = new Prisma.Decimal(pharmacy.monthlyPrice).mul(months);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.subscriptionPayment.create({
@@ -320,10 +326,10 @@ export class SuperadminService {
    */
   async pharmacySalesStats(id: number, from?: string, to?: string) {
     await this.getPharmacy(id);
-    const start = from ? new Date(from) : null;
-    const end = to ? new Date(to) : null;
-    if (start) start.setHours(0, 0, 0, 0);
-    if (end) end.setHours(23, 59, 59, 999);
+    // Sana tanlanmasa — barcha vaqt bo'yicha (sales moduldan farqli, u joriy oyni
+    // standart oladi); kun chegaralari umumiy yordamchilar bilan hisoblanadi.
+    const start = from ? startOfDay(new Date(from)) : null;
+    const end = to ? endOfDay(new Date(to)) : null;
 
     const sales = await this.prisma.sale.findMany({
       where: {
@@ -340,31 +346,7 @@ export class SuperadminService {
       include: { items: { include: { batch: true, product: true } } },
     });
 
-    let revenue = new Prisma.Decimal(0);
-    let cost = new Prisma.Decimal(0);
-    let itemsSold = 0;
-    for (const sale of sales) {
-      revenue = revenue.add(sale.total);
-      for (const item of sale.items) {
-        const unitCost =
-          item.unit === SaleUnit.PACK
-            ? item.batch.costPrice
-            : computePiecePrice(item.batch.costPrice, item.product.unitsPerPack);
-        cost = cost.add(unitCost.mul(item.quantity));
-        itemsSold +=
-          item.unit === SaleUnit.PACK
-            ? item.quantity * item.product.unitsPerPack
-            : item.quantity;
-      }
-    }
-
-    return {
-      revenue: revenue.toFixed(2),
-      cost: cost.toFixed(2),
-      profit: revenue.sub(cost).toFixed(2),
-      salesCount: sales.length,
-      itemsSold,
-    };
+    return computeSalesStats(sales);
   }
 
   /** Apteka foydalanuvchilari ro'yxati (login boshqaruvi uchun) */
