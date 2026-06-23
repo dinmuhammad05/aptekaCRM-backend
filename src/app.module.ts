@@ -11,6 +11,7 @@ import { SuperadminModule } from './superadmin/superadmin.module';
 import { PacketsModule } from './packets/packets.module';
 import { CustomersModule } from './customers/customers.module';
 import { ShiftsModule } from './shifts/shifts.module';
+import { ExpensesModule } from './expenses/expenses.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ShiftsModule } from './shifts/shifts.module';
     PacketsModule,
     CustomersModule,
     ShiftsModule,
+    ExpensesModule,
   ],
 })
 export class AppModule implements NestModule {

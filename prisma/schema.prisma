@@ -41,8 +41,25 @@ model Pharmacy {
   payments      SubscriptionPayment[]
   customers     Customer[]
   shifts        Shift[]
+  expenses      Expense[]
 
   @@index([status])
+}
+
+/// Operatsion xarajat (ijara, oylik, kommunal va h.k.) — sof foyda uchun
+model Expense {
+  id         Int      @id @default(autoincrement())
+  pharmacy   Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  pharmacyId Int
+  category   String // ijara, oylik, kommunal, boshqa
+  amount     Decimal  @db.Decimal(12, 2)
+  note       String?
+  userId     Int? // kim kiritdi
+  spentAt    DateTime @default(now()) // xarajat sanasi
+  createdAt  DateTime @default(now())
+
+  @@index([pharmacyId])
+  @@index([pharmacyId, spentAt])
 }
 
 /// Obuna to'lovi — superadmin obunani uzaytirganda yoziladi (SaaS daromadi).
