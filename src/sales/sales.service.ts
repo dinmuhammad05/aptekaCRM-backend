@@ -29,7 +29,7 @@ export class SalesService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    return this.prisma.$transaction(async (tx) => {
+    const sale = await this.prisma.$transaction(async (tx) => {
       const saleItemsData: Prisma.SaleItemCreateManySaleInput[] = [];
       let subtotal = new Prisma.Decimal(0);
 
@@ -162,6 +162,65 @@ export class SalesService {
         include: { items: true },
       });
     });
+
+    // Sotuvdan keyin kam qolgan dorilar uchun ogohlantirish (sotuvni bloklamaydi)
+    await this.notifyLowStock(
+      dto.items.map((i) => i.productId),
+      pharmacyId,
+    );
+
+    return sale;
+  }
+
+  /**
+   * Sotilgan dorilardan chegaradan past tushganlari uchun LOW_STOCK
+   * bildirishnomasi yaratadi (kassir/admin uchun). Spam bo'lmasligi uchun
+   * shu dori bo'yicha o'qilmagan ogohlantirish bo'lsa, takror yaratilmaydi.
+   */
+  private async notifyLowStock(productIds: number[], pharmacyId: number) {
+    try {
+      const ids = [...new Set(productIds)];
+      if (ids.length === 0) return;
+      const products = await this.prisma.product.findMany({
+        where: { id: { in: ids }, minStock: { gt: 0 } },
+        select: {
+          id: true,
+          name: true,
+          minStock: true,
+          batches: {
+            where: { quantity: { gt: 0 } },
+            select: { quantity: true },
+          },
+        },
+      });
+      const low = products.filter(
+        (p) => p.batches.reduce((s, b) => s + b.quantity, 0) <= p.minStock,
+      );
+      if (low.length === 0) return;
+
+      const existing = await this.prisma.notification.findMany({
+        where: {
+          type: 'LOW_STOCK',
+          read: false,
+          productId: { in: low.map((p) => p.id) },
+        },
+        select: { productId: true },
+      });
+      const alreadyNotified = new Set(existing.map((e) => e.productId));
+      const toCreate = low.filter((p) => !alreadyNotified.has(p.id));
+      if (toCreate.length === 0) return;
+
+      await this.prisma.notification.createMany({
+        data: toCreate.map((p) => ({
+          pharmacyId,
+          type: 'LOW_STOCK',
+          productId: p.id,
+          productName: p.name,
+        })),
+      });
+    } catch {
+      // Bildirishnoma xatosi sotuvni buzmasligi kerak
+    }
   }
 
   /** Chegirma summasini hisoblaydi (so'mda), [0, subtotal] ga chegaralangan */

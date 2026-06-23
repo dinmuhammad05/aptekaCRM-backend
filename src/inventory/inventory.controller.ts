@@ -51,6 +51,11 @@ export class InventoryController {
     return this.inventoryService.stock();
   }
 
+  @Get('low-stock')
+  lowStock() {
+    return this.inventoryService.lowStock();
+  }
+
   @Get('expiring')
   expiringSoon(
     @Query('days', new DefaultValuePipe(30), ParseIntPipe) days: number,

@@ -243,6 +243,39 @@ export class InventoryService {
     });
   }
 
+  /**
+   * Kam qolgan dorilar (chegara belgilangan va qoldiq <= chegara) — qayta
+   * buyurtma ro'yxati. Tavsiya: qoldiqni chegaraning 2 barobariga yetkazish.
+   */
+  async lowStock() {
+    const products = await this.prisma.product.findMany({
+      where: { minStock: { gt: 0 } },
+      orderBy: { name: 'asc' },
+      include: {
+        batches: { where: { quantity: { gt: 0 } }, select: { quantity: true } },
+      },
+    });
+    return products
+      .map((p) => ({
+        product: p,
+        totalStock: p.batches.reduce((s, b) => s + b.quantity, 0),
+      }))
+      .filter(({ product, totalStock }) => totalStock <= product.minStock)
+      .map(({ product, totalStock }) => {
+        const suggestedPieces = Math.max(0, product.minStock * 2 - totalStock);
+        return {
+          id: product.id,
+          name: product.name,
+          barcode: product.barcode,
+          unitsPerPack: product.unitsPerPack,
+          minStock: product.minStock,
+          totalStock,
+          deficit: Math.max(0, product.minStock - totalStock),
+          suggestedPacks: Math.ceil(suggestedPieces / product.unitsPerPack),
+        };
+      });
+  }
+
   /** Yaroqlilik muddati yaqinlashayotgan partiyalar (standart 30 kun) */
   async expiringSoon(days = 30) {
     const threshold = new Date();
