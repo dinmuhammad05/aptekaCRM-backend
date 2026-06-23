@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import { SuperadminModule } from './superadmin/superadmin.module';
 import { PacketsModule } from './packets/packets.module';
 import { CustomersModule } from './customers/customers.module';
+import { ShiftsModule } from './shifts/shifts.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { CustomersModule } from './customers/customers.module';
     SuperadminModule,
     PacketsModule,
     CustomersModule,
+    ShiftsModule,
   ],
 })
 export class AppModule implements NestModule {

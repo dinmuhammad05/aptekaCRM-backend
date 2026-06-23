@@ -136,6 +136,16 @@ export class SalesService {
         }
       }
 
+      // Kassirning ochiq smenasi bo'lsa, sotuv unga bog'lanadi (kassa hisoboti).
+      let shiftId: number | null = null;
+      if (userId != null) {
+        const openShift = await tx.shift.findFirst({
+          where: { userId, status: 'OPEN' },
+          select: { id: true },
+        });
+        shiftId = openShift?.id ?? null;
+      }
+
       return tx.sale.create({
         data: {
           pharmacyId,
@@ -144,6 +154,7 @@ export class SalesService {
           total,
           paid,
           customerId,
+          shiftId,
           paymentType: dto.paymentType,
           userId,
           items: { createMany: { data: saleItemsData } },

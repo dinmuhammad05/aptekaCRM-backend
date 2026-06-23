@@ -40,6 +40,7 @@ model Pharmacy {
   notifications Notification[]
   payments      SubscriptionPayment[]
   customers     Customer[]
+  shifts        Shift[]
 
   @@index([status])
 }
@@ -128,6 +129,12 @@ enum PaymentType {
   CARD
 }
 
+/// Kassir smenasi holati
+enum ShiftStatus {
+  OPEN // ochiq
+  CLOSED // yopilgan
+}
+
 /// Foydalanuvchi roli
 enum Role {
   SUPERADMIN // SaaS egasi (barcha aptekalarni boshqaradi)
@@ -149,6 +156,7 @@ model User {
   createdAt    DateTime  @default(now())
   sales        Sale[]
   returns      Return[]
+  shifts       Shift[]
 
   @@index([pharmacyId])
 }
@@ -175,12 +183,35 @@ model Sale {
   userId      Int? // sotuvni amalga oshirgan kassir
   customer    Customer?   @relation(fields: [customerId], references: [id])
   customerId  Int? // nasiya (qarz) savdosida mijoz
+  shift       Shift?      @relation(fields: [shiftId], references: [id])
+  shiftId     Int? // sotuv tegishli bo'lgan kassir smenasi
   returns     Return[]
 
   @@index([pharmacyId])
   @@index([pharmacyId, createdAt])
   @@index([userId])
   @@index([customerId])
+  @@index([shiftId])
+}
+
+/// Kassir smenasi — ochish/yopish, naqd kassani solishtirish (X/Z hisobot)
+model Shift {
+  id          Int         @id @default(autoincrement())
+  pharmacy    Pharmacy    @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  pharmacyId  Int
+  user        User?       @relation(fields: [userId], references: [id])
+  userId      Int? // smenani ochgan kassir
+  openingCash Decimal     @default(0) @db.Decimal(12, 2) // boshlang'ich kassa naqdi
+  closingCash Decimal?    @db.Decimal(12, 2) // yopilganda sanab chiqilgan naqd
+  status      ShiftStatus @default(OPEN)
+  openedAt    DateTime    @default(now())
+  closedAt    DateTime?
+  note        String?
+  sales       Sale[]
+
+  @@index([pharmacyId])
+  @@index([pharmacyId, status])
+  @@index([userId])
 }
 
 /// Mijoz (doimiy xaridor) — nasiya/qarz savdosi va sodiqlik uchun
