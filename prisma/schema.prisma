@@ -28,6 +28,7 @@ model Pharmacy {
   status             PharmacyStatus @default(ACTIVE)
   subscriptionEndsAt DateTime? // obuna tugash sanasi (null = muddatsiz)
   monthlyPrice       Decimal?       @db.Decimal(12, 2) // oylik obuna narxi (SaaS)
+  telegramChatId     String? // Telegram chat ID (kunlik xulosa/ogohlantirish yuboriladi)
   note               String? // admin uchun izoh
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt

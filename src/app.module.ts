@@ -12,6 +12,7 @@ import { PacketsModule } from './packets/packets.module';
 import { CustomersModule } from './customers/customers.module';
 import { ShiftsModule } from './shifts/shifts.module';
 import { ExpensesModule } from './expenses/expenses.module';
+import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ExpensesModule } from './expenses/expenses.module';
     CustomersModule,
     ShiftsModule,
     ExpensesModule,
+    TelegramModule,
   ],
 })
 export class AppModule implements NestModule {
