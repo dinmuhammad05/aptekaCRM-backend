@@ -87,7 +87,7 @@ export class ShiftsService {
     return { ...closed, report, difference: this.difference(closed, report) };
   }
 
-  /** Bitta smena + hisobot (X-hisobot) */
+  /** Bitta smena + hisobot (X-hisobot) + sotilgan dorilar kesimi */
   async getOne(id: number) {
     const shift = await this.prisma.shift.findFirst({
       where: { id },
@@ -95,7 +95,47 @@ export class ShiftsService {
     });
     if (!shift) throw new NotFoundException('Smena topilmadi');
     const report = await this.reportFor(id, shift.openingCash);
-    return { ...shift, report, difference: this.difference(shift, report) };
+    const products = await this.soldProducts(id);
+    return {
+      ...shift,
+      report,
+      difference: this.difference(shift, report),
+      products,
+    };
+  }
+
+  /**
+   * Smenada sotilgan dorilar kesimi (nomi, soni, savdo summasi), summasi
+   * bo'yicha kamayish tartibida. Soni PACK/PIECE birliklarining yig'indisi
+   * (sales.service `top()` bilan bir xil mantiq).
+   */
+  private async soldProducts(shiftId: number) {
+    const items = await this.prisma.saleItem.findMany({
+      where: { sale: { shiftId } },
+      include: { product: { select: { name: true } } },
+    });
+    const map = new Map<
+      number,
+      { name: string; quantity: number; revenue: Prisma.Decimal }
+    >();
+    for (const item of items) {
+      const cur = map.get(item.productId) ?? {
+        name: item.product.name,
+        quantity: 0,
+        revenue: new Prisma.Decimal(0),
+      };
+      cur.quantity += item.quantity;
+      cur.revenue = cur.revenue.add(item.subtotal);
+      map.set(item.productId, cur);
+    }
+    return [...map.entries()]
+      .map(([productId, v]) => ({
+        productId,
+        name: v.name,
+        quantity: v.quantity,
+        revenue: v.revenue.toFixed(2),
+      }))
+      .sort((a, b) => Number(b.revenue) - Number(a.revenue));
   }
 
   /** Oxirgi smenalar tarixi (hisobotlari bilan, bitta groupBy — tez) */

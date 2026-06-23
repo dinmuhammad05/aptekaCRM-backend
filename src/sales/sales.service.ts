@@ -136,15 +136,21 @@ export class SalesService {
         }
       }
 
-      // Kassirning ochiq smenasi bo'lsa, sotuv unga bog'lanadi (kassa hisoboti).
-      let shiftId: number | null = null;
-      if (userId != null) {
-        const openShift = await tx.shift.findFirst({
-          where: { userId, status: 'OPEN' },
-          select: { id: true },
-        });
-        shiftId = openShift?.id ?? null;
+      // Sotuv faqat ochiq smena ichida amalga oshiriladi — kassa hisoboti uchun
+      // smena majburiy (admin ham). Ochiq smena bo'lmasa butun tranzaksiya bekor.
+      const openShift =
+        userId == null
+          ? null
+          : await tx.shift.findFirst({
+              where: { userId, status: 'OPEN' },
+              select: { id: true },
+            });
+      if (!openShift) {
+        throw new BadRequestException(
+          'Avval smenani oching — sotuv uchun ochiq smena kerak',
+        );
       }
+      const shiftId = openShift.id;
 
       return tx.sale.create({
         data: {

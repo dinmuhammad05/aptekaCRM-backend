@@ -8,8 +8,10 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/current-user.decorator';
+import { Roles } from '../auth/roles.decorator';
 import { CloseShiftDto } from './dto/close-shift.dto';
 import { OpenShiftDto } from './dto/open-shift.dto';
 import { ShiftsService } from './shifts.service';
@@ -38,12 +40,15 @@ export class ShiftsController {
     return this.shifts.close(id, user.id, dto);
   }
 
+  // Smenalar tarixi va detali — faqat ADMIN (kassir o'z joriy smenasini ko'radi)
   @Get()
+  @Roles(Role.ADMIN)
   list(@Query('limit', new DefaultValuePipe(30), ParseIntPipe) limit: number) {
     return this.shifts.list(limit);
   }
 
   @Get(':id')
+  @Roles(Role.ADMIN)
   getOne(@Param('id', ParseIntPipe) id: number) {
     return this.shifts.getOne(id);
   }
