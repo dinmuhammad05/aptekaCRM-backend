@@ -16,7 +16,11 @@ import { UpdateBatchDto } from './dto/update-batch.dto';
 export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Yangi partiya qabul qilish (prixod) */
+  /**
+   * Yangi partiya qabul qilish (prixod). Ta'minotchi (supplierId) berilsa —
+   * partiya unga bog'lanadi va kelish qiymati (costPrice × pachka soni)
+   * ta'minotchiga qarzimizga qo'shiladi. Ikkalasi bitta tranzaksiyada.
+   */
   async receive(dto: ReceiveStockDto) {
     const product = await this.prisma.product.findUnique({
       where: { id: dto.productId },
@@ -25,24 +29,54 @@ export class InventoryService {
       throw new NotFoundException(`Dori topilmadi (id=${dto.productId})`);
     }
 
+    // Buzuq ma'lumotdan himoya: unitsPerPack hech qachon 0 bo'lmasligi kerak,
+    // aks holda pachka↔dona va qarz hisobida 0 ga bo'linish yuzaga keladi
+    const unitsPerPack = product.unitsPerPack || 1;
+
     // Qoldiq har doim donada saqlanadi: pachka donaga o'tkazilib, ochiq dona
     // qo'shiladi (masalan 5 pachka + 45 dona)
-    const quantity =
-      (dto.packs ?? 0) * product.unitsPerPack + (dto.pieces ?? 0);
+    const quantity = (dto.packs ?? 0) * unitsPerPack + (dto.pieces ?? 0);
     if (quantity <= 0) {
       throw new BadRequestException("Miqdor 0 dan katta bo'lishi kerak");
     }
 
-    return this.prisma.batch.create({
-      data: {
-        pharmacyId: requirePharmacyId(),
-        productId: dto.productId,
-        batchNumber: dto.batchNumber,
-        expiryDate: new Date(dto.expiryDate),
-        quantity,
-        costPrice: dto.costPrice,
-        sellPrice: dto.sellPrice,
-      },
+    const pharmacyId = requirePharmacyId();
+    const batchData = {
+      pharmacyId,
+      productId: dto.productId,
+      supplierId: dto.supplierId ?? null,
+      batchNumber: dto.batchNumber,
+      expiryDate: new Date(dto.expiryDate),
+      quantity,
+      costPrice: dto.costPrice,
+      sellPrice: dto.sellPrice,
+    };
+
+    // Ta'minotchisiz oddiy prixod — tranzaksiya shart emas
+    if (!dto.supplierId) {
+      return this.prisma.batch.create({ data: batchData });
+    }
+
+    // Kelish qiymati = pachka narxi × pachka ekvivalenti (donadan hisoblanadi)
+    const costTotal = new Prisma.Decimal(dto.costPrice)
+      .mul(quantity)
+      .div(unitsPerPack);
+
+    return this.prisma.$transaction(async (tx) => {
+      const supplier = await tx.supplier.findFirst({
+        where: { id: dto.supplierId },
+      });
+      if (!supplier) {
+        throw new NotFoundException(
+          `Ta'minotchi topilmadi (id=${dto.supplierId})`,
+        );
+      }
+      const batch = await tx.batch.create({ data: batchData });
+      await tx.supplier.update({
+        where: { id: dto.supplierId },
+        data: { debt: supplier.debt.add(costTotal) },
+      });
+      return batch;
     });
   }
 
@@ -244,25 +278,41 @@ export class InventoryService {
   }
 
   /**
-   * Kam qolgan dorilar (chegara belgilangan va qoldiq <= chegara) — qayta
-   * buyurtma ro'yxati. Tavsiya: qoldiqni chegaraning 2 barobariga yetkazish.
+   * Qayta buyurtma ro'yxati (kam qolgan dorilar).
+   *
+   * "Faol dori" = kamida bir marta stok kiritilgan (partiyasi bor) dori. Shu
+   * sabab hech qachon qabul qilinmagan katalog dorilari (2700+ nom) ro'yxatga
+   * TUSHMAYDI — ularni belgilash shart emas (avtomatik).
+   *
+   * Chegara (minStock) mantiqi:
+   *  - chegara belgilangan bo'lsa → qoldiq <= chegara bo'lganda buyurtmaga;
+   *  - chegara belgilanmagan (0) bo'lsa → qoldiq 0 ga tushganda buyurtmaga.
+   * Tavsiya: chegarani 2 barobariga yetkazish (kamida 1 pachka).
    */
   async lowStock() {
     const products = await this.prisma.product.findMany({
-      where: { minStock: { gt: 0 } },
+      where: { batches: { some: {} } }, // kamida bir marta stok kiritilgan
       orderBy: { name: 'asc' },
-      include: {
-        batches: { where: { quantity: { gt: 0 } }, select: { quantity: true } },
-      },
+      include: { batches: { select: { quantity: true } } },
     });
     return products
       .map((p) => ({
         product: p,
         totalStock: p.batches.reduce((s, b) => s + b.quantity, 0),
       }))
-      .filter(({ product, totalStock }) => totalStock <= product.minStock)
+      .filter(({ product, totalStock }) =>
+        product.minStock > 0
+          ? totalStock <= product.minStock
+          : totalStock <= 0,
+      )
       .map(({ product, totalStock }) => {
-        const suggestedPieces = Math.max(0, product.minStock * 2 - totalStock);
+        // Chegara bor: 2 barobariga yetkazish; chegara yo'q: 1 pachka tavsiya
+        const targetPieces = product.minStock > 0 ? product.minStock * 2 : 0;
+        const deficitPieces = Math.max(0, targetPieces - totalStock);
+        const suggestedPacks =
+          product.minStock > 0
+            ? Math.max(1, Math.ceil(deficitPieces / product.unitsPerPack))
+            : 1;
         return {
           id: product.id,
           name: product.name,
@@ -271,7 +321,7 @@ export class InventoryService {
           minStock: product.minStock,
           totalStock,
           deficit: Math.max(0, product.minStock - totalStock),
-          suggestedPacks: Math.ceil(suggestedPieces / product.unitsPerPack),
+          suggestedPacks,
         };
       });
   }

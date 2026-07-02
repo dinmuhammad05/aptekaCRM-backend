@@ -31,6 +31,11 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
+  activeIngredient?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(32)
   unit?: string;
 

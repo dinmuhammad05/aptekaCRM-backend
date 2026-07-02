@@ -41,6 +41,7 @@ model Pharmacy {
   notifications Notification[]
   payments      SubscriptionPayment[]
   customers     Customer[]
+  suppliers     Supplier[]
   shifts        Shift[]
   expenses      Expense[]
 
@@ -86,6 +87,7 @@ model Product {
   barcode          String?
   manufacturer     String?
   form             String? // tabletka, sirop, ampula va h.k.
+  activeIngredient String? // ta'sir moddasi (MNN) — analoglarni guruhlash uchun
   unit             String     @default("dona") // eng kichik o'lchov birligi (dona)
   unitsPerPack     Int        @default(1) // pachkadagi dona soni (sirop uchun 1)
   description      String?
@@ -100,6 +102,7 @@ model Product {
   @@unique([pharmacyId, barcode])
   @@index([pharmacyId])
   @@index([pharmacyId, name])
+  @@index([pharmacyId, activeIngredient])
 }
 
 /// Partiya (prixod) — har bir kelish alohida narx va yaroqlilik muddatiga ega
@@ -115,11 +118,14 @@ model Batch {
   costPrice   Decimal    @db.Decimal(12, 2) // pachka kelish narxi
   sellPrice   Decimal    @db.Decimal(12, 2) // pachka sotish narxi
   receivedAt  DateTime   @default(now())
+  supplier    Supplier?  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplierId  Int? // qaysi ta'minotchidan keldi (ixtiyoriy)
   saleItems   SaleItem[]
 
   @@index([pharmacyId])
   @@index([productId])
   @@index([expiryDate])
+  @@index([supplierId])
 }
 
 /// Xabarlar:
@@ -263,6 +269,39 @@ model CustomerPayment {
 
   @@index([pharmacyId])
   @@index([customerId])
+}
+
+/// Ta'minotchi (postavshik) — dorilar keladigan yetkazib beruvchi
+model Supplier {
+  id         Int               @id @default(autoincrement())
+  pharmacy   Pharmacy          @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  pharmacyId Int
+  name       String
+  phone      String?
+  note       String?
+  debt       Decimal           @default(0) @db.Decimal(12, 2) // ularga qarzimiz (prixodda oshadi, to'lovda kamayadi)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  batches    Batch[]
+  payments   SupplierPayment[]
+
+  @@index([pharmacyId])
+  @@index([pharmacyId, name])
+}
+
+/// Ta'minotchiga qilingan to'lov (qarzni kamaytiradi, audit izi)
+model SupplierPayment {
+  id         Int      @id @default(autoincrement())
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplierId Int
+  pharmacyId Int // tenant izolyatsiyasi (ustun bo'yicha)
+  amount     Decimal  @db.Decimal(12, 2)
+  note       String?
+  userId     Int? // to'lovni kiritgan foydalanuvchi
+  createdAt  DateTime @default(now())
+
+  @@index([pharmacyId])
+  @@index([supplierId])
 }
 
 /// Chek qatori (qaysi partiyadan qancha sotildi) — apteka chek (Sale) orqali aniqlanadi

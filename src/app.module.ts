@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import { SuperadminModule } from './superadmin/superadmin.module';
 import { PacketsModule } from './packets/packets.module';
 import { CustomersModule } from './customers/customers.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
 import { ShiftsModule } from './shifts/shifts.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { TelegramModule } from './telegram/telegram.module';
@@ -26,6 +27,7 @@ import { TelegramModule } from './telegram/telegram.module';
     SuperadminModule,
     PacketsModule,
     CustomersModule,
+    SuppliersModule,
     ShiftsModule,
     ExpensesModule,
     TelegramModule,

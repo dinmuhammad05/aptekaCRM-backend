@@ -36,6 +36,8 @@ const COLUMN_MODELS = new Set<string>([
   'User',
   'Customer',
   'CustomerPayment',
+  'Supplier',
+  'SupplierPayment',
   'Shift',
   'Expense',
 ]);

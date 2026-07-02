@@ -164,6 +164,68 @@ export class ProductsService {
     });
   }
 
+  /**
+   * Berilgan dorining analoglari (o'rnini bosuvchilari). Gibrid guruhlash:
+   *  - `activeIngredient` (ta'sir moddasi) to'ldirilgan bo'lsa — o'sha bo'yicha;
+   *  - to'ldirilmagan bo'lsa — dori nomining asosidan (birinchi so'z).
+   * POS bilan bir xil shaklda (narx + qoldiq) qaytadi, zaxirada borlari oldinda.
+   */
+  async analogs(id: number) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) {
+      throw new NotFoundException(`Dori topilmadi (id=${id})`);
+    }
+    const key = this.analogKey(product);
+    if (!key) return [];
+
+    const products = await this.prisma.product.findMany({
+      where: {
+        id: { not: id },
+        OR: [
+          { activeIngredient: { equals: key, mode: 'insensitive' } },
+          { name: { startsWith: key, mode: 'insensitive' } },
+        ],
+      },
+      include: {
+        batches: {
+          where: { quantity: { gt: 0 }, expiryDate: { gte: startOfToday() } },
+          orderBy: { expiryDate: 'asc' },
+        },
+      },
+      take: 50,
+    });
+
+    return products
+      .map((p) => {
+        const totalStock = p.batches.reduce((sum, b) => sum + b.quantity, 0);
+        const currentBatch = p.batches[0] ?? null;
+        const packPrice = currentBatch ? currentBatch.sellPrice : null;
+        return {
+          ...p,
+          totalStock,
+          packPrice,
+          piecePrice: packPrice
+            ? computePiecePrice(packPrice, p.unitsPerPack)
+            : null,
+        };
+      })
+      // Zaxirada borlari oldinda (POS'da darrov taklif qilinsin)
+      .sort((a, b) => b.totalStock - a.totalStock);
+  }
+
+  /**
+   * Analoglarni guruhlash kaliti: ta'sir moddasi (bo'lsa) yoki dori nomining
+   * birinchi so'zi (bo'shliq/raqam/verguldan oldingi), kichik harflarda.
+   */
+  private analogKey(p: {
+    name: string;
+    activeIngredient: string | null;
+  }): string {
+    const ing = p.activeIngredient?.trim().toLowerCase();
+    if (ing) return ing;
+    return p.name.trim().toLowerCase().split(/[\s,0-9]/)[0] ?? '';
+  }
+
   async findOne(id: number) {
     const product = await this.prisma.product.findUnique({
       where: { id },

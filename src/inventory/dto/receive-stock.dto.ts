@@ -17,6 +17,11 @@ export class ReceiveStockDto {
   productId: number;
 
   @IsOptional()
+  @IsInt()
+  @IsPositive()
+  supplierId?: number; // qaysi ta'minotchidan keldi (ixtiyoriy — qarzga qo'shiladi)
+
+  @IsOptional()
   @IsString()
   @MaxLength(64)
   batchNumber?: string;

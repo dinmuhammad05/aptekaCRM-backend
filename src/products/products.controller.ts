@@ -55,6 +55,12 @@ export class ProductsController {
     return this.productsService.findByBarcode(code);
   }
 
+  /** Dorining analoglari (o'rnini bosuvchilari) — `:id` route'dan oldin turishi shart */
+  @Get(':id/analogs')
+  analogs(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.analogs(id);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.productsService.findOne(id);
