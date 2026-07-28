@@ -68,13 +68,18 @@ export class SalesService {
           );
         }
 
-        // Narx skanerlangandagidek — eng yaqin muddatli (front) partiyadan.
-        // PACK → pachka narxi; PIECE → dona narxi (avtomatik, yaxlit).
+        // Narx skanerlangandagidek — eng yaqin muddatli (front) partiyadan,
+        // Yoki kassir qo'lda o'zgartirgan bo'lsa (customPrice).
         const frontBatch = batches[0];
-        const unitPrice =
-          item.unit === SaleUnit.PACK
-            ? frontBatch.sellPrice
-            : computePiecePrice(frontBatch.sellPrice, product.unitsPerPack);
+        let unitPrice: Prisma.Decimal;
+        if (item.customPrice !== undefined && item.customPrice !== null) {
+          unitPrice = new Prisma.Decimal(item.customPrice);
+        } else {
+          unitPrice =
+            item.unit === SaleUnit.PACK
+              ? frontBatch.sellPrice
+              : computePiecePrice(frontBatch.sellPrice, product.unitsPerPack);
+        }
         const lineSubtotal = unitPrice.mul(item.quantity);
         subtotal = subtotal.add(lineSubtotal);
 

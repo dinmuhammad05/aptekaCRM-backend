@@ -27,6 +27,11 @@ export class SaleItemDto {
 
   @IsEnum(SaleUnit)
   unit: SaleUnit; // PACK yoki PIECE
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  customPrice?: number; // Kassir o'zgartirgan narx
 }
 
 export class CreateSaleDto {
