@@ -14,5 +14,5 @@ export function computePiecePrice(
   }
   return packPrice
     .div(unitsPerPack)
-    .toDecimalPlaces(0, Prisma.Decimal.ROUND_UP);
+    .toDecimalPlaces(2, Prisma.Decimal.ROUND_UP);
 }
