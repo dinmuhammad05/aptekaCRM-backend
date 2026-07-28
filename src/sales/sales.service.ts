@@ -284,14 +284,20 @@ export class SalesService {
       orderBy: { createdAt: 'desc' },
       take: Math.min(Math.max(take, 1), 200),
       skip: Math.max(skip, 0),
-      include: { items: { include: { product: true } } },
+      include: {
+        items: { include: { product: true } },
+        returns: true,
+      },
     });
   }
 
   async findOne(id: number) {
     const sale = await this.prisma.sale.findUnique({
       where: { id },
-      include: { items: { include: { product: true, batch: true } } },
+      include: {
+        items: { include: { product: true, batch: true } },
+        returns: { include: { items: true } },
+      },
     });
     if (!sale) {
       throw new NotFoundException(`Chek topilmadi (id=${id})`);

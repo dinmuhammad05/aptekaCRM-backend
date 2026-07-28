@@ -41,7 +41,7 @@ export class ShiftsService {
       where: { userId, status: 'OPEN' },
     });
     if (!shift) return null;
-    return { ...shift, report: await this.reportFor(shift.id, shift.openingCash) };
+    return { ...shift, report: await this.reportFor(shift) };
   }
 
   /** Smena ochish — kassirda ochiq smena bo'lsa, ikkinchisini ochib bo'lmaydi */
@@ -74,7 +74,7 @@ export class ShiftsService {
     if (shift.userId !== userId) {
       throw new BadRequestException('Bu smena boshqa kassirga tegishli');
     }
-    const report = await this.reportFor(id, shift.openingCash);
+    const report = await this.reportFor(shift);
     const closed = await this.prisma.shift.update({
       where: { id },
       data: {
@@ -94,7 +94,7 @@ export class ShiftsService {
       include: { user: { select: { name: true, username: true } } },
     });
     if (!shift) throw new NotFoundException('Smena topilmadi');
-    const report = await this.reportFor(id, shift.openingCash);
+    const report = await this.reportFor(shift);
     const products = await this.soldProducts(id);
     return {
       ...shift,
@@ -161,8 +161,28 @@ export class ShiftsService {
       byShift.set(row.shiftId, arr);
     }
 
+    const allReturns = await this.prisma.return.findMany({
+      where: {
+        OR: shifts.map((s) => ({
+          userId: s.userId,
+          createdAt: { gte: s.openedAt, lte: s.closedAt ?? new Date() },
+        })),
+      },
+      include: { sale: { select: { paymentType: true } } },
+    });
+
     return shifts.map((s) => {
-      const report = this.buildReport(s.openingCash, byShift.get(s.id) ?? []);
+      const shiftReturns = allReturns.filter(
+        (r) =>
+          r.userId === s.userId &&
+          r.createdAt >= s.openedAt &&
+          r.createdAt <= (s.closedAt ?? new Date()),
+      );
+      const report = this.buildReport(
+        s.openingCash,
+        byShift.get(s.id) ?? [],
+        shiftReturns,
+      );
       return { ...s, report, difference: this.difference(s, report) };
     });
   }
@@ -176,19 +196,37 @@ export class ShiftsService {
     return shift.closingCash.sub(report.expectedCash).toFixed(2);
   }
 
-  private async reportFor(shiftId: number, openingCash: Prisma.Decimal) {
+  private async reportFor(shift: {
+    id: number;
+    userId: number | null;
+    openedAt: Date;
+    closedAt: Date | null;
+    openingCash: Prisma.Decimal;
+  }) {
     const grouped = await this.prisma.sale.groupBy({
       by: ['paymentType'],
-      where: { shiftId },
+      where: { shiftId: shift.id },
       _sum: { total: true, paid: true },
       _count: { _all: true },
     });
-    return this.buildReport(openingCash, grouped as PaymentGroup[]);
+    const returns = await this.prisma.return.findMany({
+      where: {
+        userId: shift.userId,
+        createdAt: { gte: shift.openedAt, lte: shift.closedAt ?? new Date() },
+      },
+      include: { sale: { select: { paymentType: true } } },
+    });
+    return this.buildReport(
+      shift.openingCash,
+      grouped as PaymentGroup[],
+      returns,
+    );
   }
 
   private buildReport(
     openingCash: Prisma.Decimal,
     rows: PaymentGroup[],
+    returns: { total: Prisma.Decimal; sale: { paymentType: string } }[] = [],
   ): ShiftReport {
     let revenue = new Prisma.Decimal(0);
     let paid = new Prisma.Decimal(0);
@@ -201,6 +239,18 @@ export class ShiftsService {
       count += row._count._all;
       if (row.paymentType === 'CASH') cash = cash.add(row._sum.paid ?? 0);
       if (row.paymentType === 'CARD') card = card.add(row._sum.paid ?? 0);
+    }
+    
+    for (const ret of returns) {
+      revenue = revenue.sub(ret.total);
+      if (ret.sale.paymentType === 'CASH') {
+        cash = cash.sub(ret.total);
+        paid = paid.sub(ret.total);
+      }
+      if (ret.sale.paymentType === 'CARD') {
+        card = card.sub(ret.total);
+        paid = paid.sub(ret.total);
+      }
     }
     return {
       salesCount: count,
