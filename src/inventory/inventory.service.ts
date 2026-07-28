@@ -277,6 +277,49 @@ export class InventoryService {
     });
   }
 
+  async stockPaginated(search: string = '', take: number = 50, skip: number = 0) {
+    const where = search
+      ? {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' as const } },
+            { barcode: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
+
+    const [total, products] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        take,
+        skip,
+        include: {
+          batches: {
+            where: { quantity: { gt: 0 } },
+            orderBy: { expiryDate: 'asc' },
+          },
+        },
+      }),
+    ]);
+
+    const data = products.map((product) => {
+      const totalStock = product.batches.reduce(
+        (sum, b) => sum + b.quantity,
+        0,
+      ); // donada
+      return {
+        ...product,
+        totalStock,
+        fullPacks: Math.floor(totalStock / product.unitsPerPack),
+        loosePieces: totalStock % product.unitsPerPack,
+        lowStock: totalStock <= product.minStock,
+      };
+    });
+
+    return { data, total, take, skip };
+  }
+
   /**
    * Qayta buyurtma ro'yxati (kam qolgan dorilar).
    *

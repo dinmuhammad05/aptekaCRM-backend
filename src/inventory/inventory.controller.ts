@@ -51,6 +51,15 @@ export class InventoryController {
     return this.inventoryService.stock();
   }
 
+  @Get('stock-paginated')
+  stockPaginated(
+    @Query('take', new DefaultValuePipe(50), ParseIntPipe) take: number,
+    @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+    @Query('search') search?: string,
+  ) {
+    return this.inventoryService.stockPaginated(search, take, skip);
+  }
+
   @Get('low-stock')
   lowStock() {
     return this.inventoryService.lowStock();
