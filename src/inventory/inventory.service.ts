@@ -95,7 +95,7 @@ export class InventoryService {
       throw new NotFoundException(`Dori topilmadi (id=${dto.productId})`);
     }
 
-    const quantity = dto.packs * product.unitsPerPack;
+    const quantity = (dto.packs ?? 0) * product.unitsPerPack + (dto.pieces ?? 0);
     if (quantity <= 0) {
       throw new BadRequestException("Miqdor 0 dan katta bo'lishi kerak");
     }
@@ -429,14 +429,25 @@ export class InventoryService {
         // Ko'paytirish — mavjud (front) partiyaga qo'shamiz
         const front = batches[0];
         if (!front) {
-          throw new BadRequestException(
-            "Faol partiya yo'q — avval dorini qabul qiling (narx va muddat kerak)",
-          );
+          const expiryDate = new Date();
+          expiryDate.setFullYear(expiryDate.getFullYear() + 2);
+
+          await tx.batch.create({
+            data: {
+              pharmacyId: product.pharmacyId,
+              productId: product.id,
+              expiryDate,
+              quantity: delta,
+              costPrice: product.defaultCostPrice ? Number(product.defaultCostPrice) : 0,
+              sellPrice: product.defaultSellPrice ? Number(product.defaultSellPrice) : 0,
+            },
+          });
+        } else {
+          await tx.batch.update({
+            where: { id: front.id },
+            data: { quantity: { increment: delta } },
+          });
         }
-        await tx.batch.update({
-          where: { id: front.id },
-          data: { quantity: { increment: delta } },
-        });
       }
 
       return { productId: dto.productId, totalStock: dto.quantity };

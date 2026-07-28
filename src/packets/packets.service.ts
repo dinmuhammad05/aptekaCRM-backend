@@ -230,6 +230,7 @@ export class PacketsService {
       unit: string;
       unitsPerPack: number;
       defaultCostPrice: typeof packet.items[number]['defaultCostPrice'];
+      defaultSellPrice: typeof packet.items[number]['sellPrice'];
     }[] = [];
 
     for (const it of packet.items) {
@@ -251,6 +252,7 @@ export class PacketsService {
         unit: it.unit,
         unitsPerPack: it.unitsPerPack,
         defaultCostPrice: it.defaultCostPrice,
+        defaultSellPrice: it.sellPrice,
       });
     }
 

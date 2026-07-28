@@ -26,8 +26,13 @@ export class InitialStockDto {
   barcode?: string;
 
   @IsInt()
-  @Min(1)
-  packs: number; // nechta pachka bor (donaga avtomatik o'tkaziladi)
+  @Min(0)
+  packs: number; // nechta pachka bor
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  pieces?: number; // nechta ochiq dona bor
 
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
