@@ -244,16 +244,28 @@ export class ProductsService {
   async findByBarcode(barcode: string) {
     // barcode endi apteka ichida unique (global emas) — findFirst ishlatamiz;
     // tenant filtri Prisma middleware orqali avtomatik qo'shiladi
-    const product = await this.prisma.product.findFirst({
+    let product = await this.prisma.product.findFirst({
       where: { barcode },
       include: {
         batches: {
-          // Faqat yaroqli (muddati o'tmagan) partiyalar
           where: { quantity: { gt: 0 }, expiryDate: { gte: startOfToday() } },
           orderBy: { expiryDate: 'asc' },
         },
       },
     });
+
+    if (!product && barcode.length > 5) {
+      product = await this.prisma.product.findFirst({
+        where: { barcode: { contains: barcode } },
+        include: {
+          batches: {
+            where: { quantity: { gt: 0 }, expiryDate: { gte: startOfToday() } },
+            orderBy: { expiryDate: 'asc' },
+          },
+        },
+      });
+    }
+
     if (!product) {
       throw new NotFoundException(`Barcode topilmadi: ${barcode}`);
     }
