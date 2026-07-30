@@ -26,14 +26,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status = exception.getStatus();
       message = exception.getResponse();
       
-      // If NestJS wrapped it in { message: ... }
-      if (typeof message === 'object' && message !== null && 'message' in message) {
-        const msg = (message as any).message;
+      let msg = message;
+      if (typeof message === 'object' && message !== null) {
+        // If NestJS wrapped it in { message: ... } (happens for strings)
+        if ('message' in message) {
+          msg = (message as any).message;
+        }
         
         // Handle custom structured error { key: '...', args: {...} }
-        if (typeof msg === 'object' && msg !== null && 'key' in msg) {
-          if (msg.key === 'INSUFFICIENT_STOCK') {
-            const { product, available, required, unit } = msg.args;
+        // This could be either directly in `message` or unwrapped into `msg`
+        const targetObj = (typeof msg === 'object' && msg !== null && 'key' in msg) ? msg : (('key' in message) ? message : null);
+
+        if (targetObj) {
+          if (targetObj.key === 'INSUFFICIENT_STOCK') {
+            const { product, available, required, unit } = targetObj.args;
             if (lang === 'ru') {
               const u = unit === 'pack' ? 'уп.' : 'шт.';
               message = `Недостаточно годного остатка для "${product}" (в наличии: ${available} ${u}, нужно: ${required} ${u}). Просроченные партии не продаются.`;
@@ -44,7 +50,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
               const u = unit === 'pack' ? 'pachka' : 'dona';
               message = `"${product}" uchun yaroqli qoldiq yetarli emas (mavjud: ${available} ${u}, kerak: ${required} ${u}). Muddati o'tgan partiyalar sotilmaydi.`;
             }
-          } else if (msg.key === 'SHIFT_CLOSED') {
+          } else if (targetObj.key === 'SHIFT_CLOSED') {
             if (lang === 'ru') message = 'Сначала откройте смену — для продажи нужна открытая смена';
             else if (lang === 'tg') message = 'Аввал сменаро кушоед — барои фурӯш сменаи кушод лозим аст';
             else message = 'Avval smenani oching — sotuv uchun ochiq smena kerak';
