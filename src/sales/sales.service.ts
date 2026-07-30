@@ -62,10 +62,16 @@ export class SalesService {
         // Qoldiq tekshiruvi donada (faqat muddati o'tmagan partiyalar)
         const availablePieces = batches.reduce((sum, b) => sum + b.quantity, 0);
         if (availablePieces < pieces) {
-          const unitLabel = item.unit === SaleUnit.PACK ? 'pachka' : 'dona';
-          throw new BadRequestException(
-            `"${product.name}" uchun yaroqli qoldiq yetarli emas (mavjud: ${availablePieces} dona, kerak: ${item.quantity} ${unitLabel}). Muddati o'tgan partiyalar sotilmaydi.`,
-          );
+          const unitLabel = item.unit === SaleUnit.PACK ? 'pack' : 'piece';
+          throw new BadRequestException({
+            key: 'INSUFFICIENT_STOCK',
+            args: {
+              product: product.name,
+              available: availablePieces,
+              required: item.quantity,
+              unit: unitLabel,
+            },
+          });
         }
 
         // Narx skanerlangandagidek — eng yaqin muddatli (front) partiyadan,
@@ -151,9 +157,7 @@ export class SalesService {
               select: { id: true },
             });
       if (!openShift) {
-        throw new BadRequestException(
-          'Avval smenani oching — sotuv uchun ochiq smena kerak',
-        );
+        throw new BadRequestException({ key: 'SHIFT_CLOSED' });
       }
       const shiftId = openShift.id;
 
