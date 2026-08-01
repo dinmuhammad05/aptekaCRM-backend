@@ -46,6 +46,12 @@ export class InventoryController {
     return this.inventoryService.adjustStock(dto);
   }
 
+  
+  @Get('recent-batches')
+  recentBatches() {
+    return this.inventoryService.recentBatches();
+  }
+
   @Get('stock')
   stock() {
     return this.inventoryService.stock();

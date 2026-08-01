@@ -251,6 +251,18 @@ export class InventoryService {
   }
 
   /** Har bir dori bo'yicha umumiy qoldiq + partiyalar */
+  
+  async recentBatches() {
+    return this.prisma.batch.findMany({
+      where: { pharmacyId: requirePharmacyId() },
+      orderBy: { receivedAt: 'desc' },
+      take: 100,
+      include: {
+        product: true
+      }
+    });
+  }
+
   async stock() {
     const products = await this.prisma.product.findMany({
       orderBy: { name: 'asc' },
