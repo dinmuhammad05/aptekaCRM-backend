@@ -263,6 +263,24 @@ export class InventoryService {
     });
   }
 
+  
+  async stats() {
+    const batches = await this.prisma.batch.findMany({
+      where: { pharmacyId: requirePharmacyId(), quantity: { gt: 0 } },
+      include: { product: true }
+    });
+    let totalCost = 0;
+    let totalSell = 0;
+    batches.forEach(b => {
+      if (b.product) {
+        const packs = b.quantity / (b.product.unitsPerPack || 1);
+        totalCost += packs * Number(b.costPrice);
+        totalSell += packs * Number(b.sellPrice);
+      }
+    });
+    return { totalCost, totalSell };
+  }
+
   async stock() {
     const products = await this.prisma.product.findMany({
       orderBy: { name: 'asc' },

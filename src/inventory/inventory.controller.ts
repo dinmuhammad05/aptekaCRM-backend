@@ -52,6 +52,12 @@ export class InventoryController {
     return this.inventoryService.recentBatches();
   }
 
+  
+  @Get('stats')
+  stats() {
+    return this.inventoryService.stats();
+  }
+
   @Get('stock')
   stock() {
     return this.inventoryService.stock();
