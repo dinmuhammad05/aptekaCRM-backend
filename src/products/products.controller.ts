@@ -41,6 +41,11 @@ export class ProductsController {
    * Kassa uchun — nom YOKI barcode bo'yicha qisman (LIKE) qidiruv.
    * `:id` route'dan oldin turishi shart, aks holda "search-pos" id deb o'qiladi.
    */
+  @Get('quick-select')
+  quickSelectForPos() {
+    return this.productsService.quickSelectForPos();
+  }
+
   @Get('search-pos')
   searchForPos(
     @Query('q') q: string,

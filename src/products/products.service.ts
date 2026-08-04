@@ -157,6 +157,31 @@ export class ProductsService {
     });
   }
 
+  async quickSelectForPos() {
+    const products = await this.prisma.product.findMany({
+      where: { isQuickSelect: true },
+      include: {
+        batches: {
+          where: { quantity: { gt: 0 }, expiryDate: { gte: startOfToday() } },
+          orderBy: { expiryDate: 'asc' },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return products.map((product) => {
+      const totalStock = product.batches.reduce((sum, b) => sum + b.quantity, 0);
+      const currentBatch = product.batches[0] ?? null;
+      const packPrice = currentBatch ? currentBatch.sellPrice : null;
+      return {
+        ...product,
+        totalStock, // donada
+        packPrice,
+        piecePrice: packPrice ? computePiecePrice(packPrice, product.unitsPerPack) : null,
+      };
+    });
+  }
+
   /**
    * Berilgan dorining analoglari (o'rnini bosuvchilari). Gibrid guruhlash:
    *  - `activeIngredient` (ta'sir moddasi) to'ldirilgan bo'lsa — o'sha bo'yicha;

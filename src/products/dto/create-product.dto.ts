@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsInt,
   IsNumber,
   IsOptional,
@@ -58,4 +59,8 @@ export class CreateProductDto {
   @IsNumber()
   @Min(0)
   defaultCostPrice?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isQuickSelect?: boolean;
 }

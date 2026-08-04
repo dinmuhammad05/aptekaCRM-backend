@@ -94,6 +94,7 @@ model Product {
   minStock         Int        @default(0) // kam qolish chegarasi (ogohlantirish uchun)
   defaultCostPrice Decimal?   @db.Decimal(12, 2) // katalog/tavsiya kelish narxi (prixodda taklif qilinadi)
   defaultSellPrice Decimal?   @db.Decimal(12, 2) // katalog/tavsiya sotish narxi
+  isQuickSelect    Boolean    @default(false) // kassada tezkor qo'shish uchun podskazka
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
   batches          Batch[]
