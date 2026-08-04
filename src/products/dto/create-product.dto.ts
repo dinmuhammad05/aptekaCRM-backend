@@ -16,7 +16,7 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(64)
+  @MaxLength(255)
   barcode?: string;
 
   @IsOptional()
@@ -26,7 +26,7 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(64)
+  @MaxLength(255)
   form?: string;
 
   @IsOptional()

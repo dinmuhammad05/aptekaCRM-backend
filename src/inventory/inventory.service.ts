@@ -11,6 +11,7 @@ import { ImportStockDto } from './dto/import-stock.dto';
 import { InitialStockDto } from './dto/initial-stock.dto';
 import { ReceiveStockDto } from './dto/receive-stock.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
+import { buildSearchConditions } from '../common/search';
 
 @Injectable()
 export class InventoryService {
@@ -309,12 +310,7 @@ export class InventoryService {
 
   async stockPaginated(search: string = '', take: number = 50, skip: number = 0) {
     const where = search
-      ? {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' as const } },
-            { barcode: { contains: search, mode: 'insensitive' as const } },
-          ],
-        }
+      ? { OR: buildSearchConditions(search) }
       : {};
 
     const [total, products] = await Promise.all([

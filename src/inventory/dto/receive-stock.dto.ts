@@ -23,7 +23,7 @@ export class ReceiveStockDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(64)
+  @MaxLength(255)
   batchNumber?: string;
 
   @IsDateString()

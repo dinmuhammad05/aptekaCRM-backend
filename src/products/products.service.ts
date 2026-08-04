@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { computePiecePrice } from '../common/pricing';
 import { requirePharmacyId } from '../common/tenant-context';
+import { buildSearchConditions } from '../common/search';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ImportCatalogDto } from './dto/import-catalog.dto';
@@ -105,12 +106,7 @@ export class ProductsService {
 
   findAll(search?: string) {
     const where: Prisma.ProductWhereInput = search
-      ? {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { barcode: { contains: search } },
-          ],
-        }
+      ? { OR: buildSearchConditions(search) }
       : {};
 
     return this.prisma.product.findMany({
@@ -130,10 +126,7 @@ export class ProductsService {
 
     const products = await this.prisma.product.findMany({
       where: {
-        OR: [
-          { name: { contains: q, mode: 'insensitive' } },
-          { barcode: { contains: q } },
-        ],
+        OR: buildSearchConditions(q),
       },
       include: {
         batches: {

@@ -21,7 +21,7 @@ export class PacketItemInputDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(64)
+  @MaxLength(255)
   barcode?: string;
 
   @IsOptional()
@@ -81,7 +81,7 @@ export class UpdatePacketItemDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(64)
+  @MaxLength(255)
   barcode?: string;
 
   @IsOptional()

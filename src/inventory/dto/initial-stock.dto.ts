@@ -22,7 +22,7 @@ export class InitialStockDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(64)
+  @MaxLength(255)
   barcode?: string;
 
   @IsInt()

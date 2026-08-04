@@ -16,7 +16,7 @@ import {
 export class UpdateBatchDto {
   @IsOptional()
   @IsString()
-  @MaxLength(64)
+  @MaxLength(255)
   batchNumber?: string;
 
   @IsOptional()

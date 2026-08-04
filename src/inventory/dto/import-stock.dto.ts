@@ -38,7 +38,7 @@ export class ImportItemDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(64)
+  @MaxLength(255)
   form?: string;
 
   @IsOptional()
@@ -54,7 +54,7 @@ export class ImportItemDto {
   // --- Partiya (prixod) maydonlari ---
   @IsOptional()
   @IsString()
-  @MaxLength(64)
+  @MaxLength(255)
   batchNumber?: string;
 
   @IsDateString()
