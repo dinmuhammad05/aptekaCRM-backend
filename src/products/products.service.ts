@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { computePiecePrice } from '../common/pricing';
 import { requirePharmacyId } from '../common/tenant-context';
@@ -309,6 +309,15 @@ export class ProductsService {
 
   async remove(id: number) {
     await this.findOne(id);
-    return this.prisma.product.delete({ where: { id } });
+    try {
+      return await this.prisma.product.delete({ where: { id } });
+    } catch (error) {
+      if (error?.code === 'P2003') {
+        throw new BadRequestException(
+          "Ushbu dorini o'chirib bo'lmaydi, chunki undan oldin sotuv qilingan yoki tarixda mavjud. Buning o'rniga qoldig'ini (partiyalarini) o'chirishingiz mumkin."
+        );
+      }
+      throw error;
+    }
   }
 }
