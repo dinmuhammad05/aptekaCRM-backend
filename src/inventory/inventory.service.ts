@@ -144,9 +144,10 @@ export class InventoryService {
     return this.prisma.$transaction(async (tx) => {
       let createdProducts = 0;
       let createdBatches = 0;
+      const createdProductsMap = new Map<string, any>();
 
       for (const [index, item] of dto.items.entries()) {
-        const product = await this.resolveProduct(tx, item, index, pharmacyId);
+        const product = await this.resolveProduct(tx, item, index, pharmacyId, createdProductsMap);
 
         // Narx pasayishidan himoya: mavjud doriga yangi narx joriy (FEFO)
         // sotuv narxidan past kelsa — eski (yuqori) narx saqlanadi va kassirga
@@ -184,6 +185,7 @@ export class InventoryService {
     item: ImportStockDto['items'][number],
     index: number,
     pharmacyId: number,
+    createdProductsMap: Map<string, any>,
   ) {
     if (item.productId) {
       const product = await tx.product.findUnique({
@@ -203,7 +205,28 @@ export class InventoryService {
       );
     }
 
-    return tx.product.create({
+    const normalizedName = item.name.trim().toLowerCase();
+    
+    // 1. Check if we already created it in this import transaction
+    if (createdProductsMap.has(normalizedName)) {
+      return createdProductsMap.get(normalizedName);
+    }
+
+    // 2. Check if it already exists in the database but frontend missed it
+    const existing = await tx.product.findFirst({
+      where: {
+        pharmacyId,
+        name: { equals: item.name.trim(), mode: 'insensitive' }
+      }
+    });
+
+    if (existing) {
+      createdProductsMap.set(normalizedName, existing);
+      return existing;
+    }
+
+    // 3. Create new product
+    const newProduct = await tx.product.create({
       data: {
         pharmacyId,
         name: item.name.trim(),
@@ -213,6 +236,9 @@ export class InventoryService {
         unitsPerPack: item.unitsPerPack ?? 1,
       },
     });
+
+    createdProductsMap.set(normalizedName, newProduct);
+    return newProduct;
   }
 
   /**
